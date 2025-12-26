@@ -29,15 +29,15 @@ Requiere tree-sitter y los paquetes de lenguajes:
 
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from tree_sitter import Language, Parser
 
 from codemap.parsers.ast_parser import (
     BaseASTParser,
-    Entity,
     CallEdge,
     Dependency,
+    Entity,
     ParseResult,
 )
 from codemap.parsers import utils as parser_utils
@@ -190,7 +190,7 @@ class TreeSitterParser(BaseASTParser):
 
         return result
 
-    def _extract_entities(self, node, content: str, file_path: Path) -> List[TreeSitterEntity]:
+    def _extract_entities(self, node, content: str, file_path: Path) -> List[Entity]:
         """Extrae definiciones de entidades del AST.
 
         Recorre recursivamente el AST para encontrar todos los nodos de
@@ -202,10 +202,9 @@ class TreeSitterParser(BaseASTParser):
             file_path: Ruta del archivo para metadatos de entidad.
 
         Returns:
-            Lista de objetos TreeSitterEntity extraídos.
+            Lista de objetos Entity extraídos.
         """
         entities = []
-        lines = content.split("\n")
 
         for child in node.children:
             if child.type in self.DEFINITION_TYPES:
