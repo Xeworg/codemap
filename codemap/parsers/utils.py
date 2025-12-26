@@ -110,14 +110,15 @@ def get_file_encoding(file_path: Path) -> str:
 
     Returns:
         String de codificación detectada (ej: 'utf-8', 'latin-1').
-        Retorna 'utf-8' si chardet no está instalado.
+        Retorna 'utf-8' como fallback.
     """
     try:
         import chardet
 
         with open(file_path, "rb") as f:
             result = chardet.detect(f.read(1024 * 1024))
-            return result.get("encoding", "utf-8")
+            encoding = result.get("encoding")
+            return encoding if encoding else "utf-8"
     except ImportError:
         return "utf-8"
 
