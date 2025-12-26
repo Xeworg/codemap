@@ -29,11 +29,10 @@ Requiere los paquetes tree-sitter y tree-sitter-libraries:
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
-import json
 
 try:
     import tree_sitter
-    from tree_sitter import Language, Parser
+    from tree_sitter import Parser
 
     TREE_SITTER_AVAILABLE = True
 except ImportError:
