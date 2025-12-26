@@ -83,10 +83,10 @@ build = [
 codemap = "codemap.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/codemap-ai/codemap"
-Repository = "https://github.com/codemap-ai/codemap"
-Issues = "https://github.com/codemap-ai/codemap/issues"
-Changelog = "https://github.com/codemap-ai/codemap/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Xeworg/codemap"
+Repository = "https://github.com/Xeworg/codemap"
+Issues = "https://github.com/Xeworg/codemap/issues"
+Changelog = "https://github.com/Xeworg/codemap/blob/main/CHANGELOG.md"
 
 [tool.uv]
 dev-dependencies = [
