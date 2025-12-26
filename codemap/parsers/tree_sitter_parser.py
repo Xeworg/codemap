@@ -31,13 +31,9 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 
-try:
-    import tree_sitter
-    from tree_sitter import Language, Parser
+from tree_sitter import Language, Parser
 
-    TREE_SITTER_AVAILABLE = True
-except ImportError:
-    TREE_SITTER_AVAILABLE = False
+TREE_SITTER_AVAILABLE = True
 
 from codemap.parsers.ast_parser import (
     BaseASTParser,
