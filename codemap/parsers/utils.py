@@ -15,11 +15,9 @@ Ejemplo
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any
-import re
 
 
-def detect_language(file_path: Path) -> Optional[str]:
+def detect_language(file_path: Path) -> str | None:
     """Detecta el lenguaje de programación desde la extensión del archivo.
 
     Args:
@@ -95,7 +93,6 @@ def detect_language(file_path: Path) -> Optional[str]:
         ".swiftsource": "swift",
         ".m": "objective-c",
         ".mm": "objective-c",
-        ".h": "objective-c",
     }
     return ext_map.get(file_path.suffix.lower())
 
@@ -123,7 +120,7 @@ def get_file_encoding(file_path: Path) -> str:
         return "utf-8"
 
 
-def read_file_safe(file_path: Path) -> Optional[str]:
+def read_file_safe(file_path: Path) -> str | None:
     """Lee un archivo de forma segura con detección de manejo de errores.
 
     Args:
@@ -134,7 +131,7 @@ def read_file_safe(file_path: Path) -> Optional[str]:
     """
     try:
         encoding = get_file_encoding(file_path)
-        with open(file_path, "r", encoding=encoding, errors="replace") as f:
+        with open(file_path, encoding=encoding, errors="replace") as f:
             return f.read()
     except Exception:
         return None
@@ -160,7 +157,7 @@ def normalize_path(path: Path, base: Path) -> str:
         return str(path)
 
 
-def extract_line_number(content: str, pattern: str) -> Optional[int]:
+def extract_line_number(content: str, pattern: str) -> int | None:
     """Extrae el número de línea donde aparece el patrón por primera vez.
 
     Args:
