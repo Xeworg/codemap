@@ -461,31 +461,3 @@ class TreeSitterParser(BaseASTParser):
             "total_complexity": total_complexity,
             "avg_complexity": total_complexity / len(entities) if entities else 0,
         }
-
-    def _compute_metrics(self, content: str, entities: List[Entity]) -> Dict[str, Any]:
-        """Calcula métricas para el contenido analizado.
-
-        Args:
-            content: Contenido del código fuente.
-            entities: Lista de entidades extraídas.
-
-        Returns:
-            Diccionario conteniendo métricas:
-            - total_loc: Total de líneas incluyendo vacías/comentarios
-            - code_loc: Líneas de código real
-            - entity_count: Número de entidades encontradas
-            - total_complexity: Suma de complejidades de entidades
-            - avg_complexity: Complejidad promedio por entidad
-        """
-        total_loc = parser_utils.count_lines(content)
-        code_loc = parser_utils.count_lines_of_code(content)
-
-        total_complexity = sum(e.complexity for e in entities)
-
-        return {
-            "total_loc": total_loc,
-            "code_loc": code_loc,
-            "entity_count": len(entities),
-            "total_complexity": total_complexity,
-            "avg_complexity": total_complexity / len(entities) if entities else 0,
-        }
