@@ -1,20 +1,20 @@
-"""Parsers module for CodeMap.
+"""Módulo de parsers para CodeMap.
 
-Provides code parsing functionality for multiple programming languages.
-Supports AST-based analysis using tree-sitter for language-agnostic parsing.
+Proporciona funcionalidad de análisis de código para múltiples lenguajes de programación.
+Soporta análisis basado en AST usando tree-sitter para parsing agnóstico del lenguaje.
 
-Available Parsers
------------------
-- TreeSitterParser: Multi-language parser using tree-sitter
-- BaseASTParser: Abstract base class for custom parsers
+Parsers Disponibles
+-------------------
+- TreeSitterParser: Parser multi-lenguaje usando tree-sitter
+- BaseASTParser: Clase base abstracta para parsers personalizados
 
-Usage
------
+Uso
+---
 >>> from codemap.parsers import TreeSitterParser
 >>> parser = TreeSitterParser()
->>> result = parser.parse_file(Path("example.py"))
->>> for entity in result.entities:
-...     print(f"{entity.type}: {entity.name}")
+>>> resultado = parser.parse_file(Path("ejemplo.py"))
+>>> for entidad in resultado.entidades:
+...     print(f"{entidad.tipo}: {entidad.nombre}")
 """
 
 from codemap.parsers.ast_parser import (

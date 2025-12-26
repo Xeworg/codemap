@@ -1,23 +1,23 @@
-"""Base AST Parser for CodeMap.
+"""Parser AST base para CodeMap.
 
-Provides abstract base classes and data structures for code parsing.
-All language-specific parsers should inherit from BaseASTParser.
+Proporciona clases base abstractas y estructuras de datos para el análisis de código.
+Todos los parsers específicos de un lenguaje deben heredar de BaseASTParser.
 
-Data Structures
----------------
-- Entity: Represents a code entity (class, function, method, etc.)
-- CallEdge: Represents a call relationship between entities
-- Dependency: Represents a module dependency
-- ParseResult: Contains all parsed information from a file
+Estructuras de Datos
+--------------------
+- Entity: Representa una entidad de código (clase, función, método, etc.)
+- CallEdge: Representa una relación de llamada entre entidades
+- Dependency: Representa una dependencia de módulo
+- ParseResult: Contiene toda la información analizada de un archivo
 
-Example
+Ejemplo
 -------
 >>> from codemap.parsers.ast_parser import BaseASTParser, Entity
->>> class MyParser(BaseASTParser):
+>>> class MiParser(BaseASTParser):
 ...     def parse_file(self, file_path):
 ...         return ParseResult(file=str(file_path), language="python")
 ...
->>> parser = MyParser()
+>>> parser = MiParser()
 """
 
 from abc import ABC, abstractmethod
@@ -30,24 +30,24 @@ import codemap.parsers.utils as parser_utils
 
 @dataclass
 class Entity:
-    """Represents a code entity (class, function, method, etc.).
+    """Representa una entidad de código (clase, función, método, etc.).
 
-    Attributes:
-        id: Unique identifier in format "type:name" (e.g., "class:User")
-        type: Entity type (class, function, method, module, etc.)
-        name: Name of the entity
-        file: Relative file path where entity is defined
-        line: Line number where entity starts
-        end_line: Line number where entity ends (optional)
-        parent: ID of parent entity if nested (optional)
-        children: List of child entity IDs (optional)
-        methods: List of method names for class entities
-        parameters: List of parameter names for functions/methods
-        decorators: List of decorator names applied to entity
-        imports: List of imported modules/symbols
-        docstring: Documentation string if present
-        loc: Lines of code for this entity
-        complexity: Cyclomatic complexity (default: 1)
+    Atributos:
+        id: Identificador único en formato "tipo:nombre" (ej: "class:User")
+        type: Tipo de entidad (class, function, method, module, etc.)
+        name: Nombre de la entidad
+        file: Ruta relativa del archivo donde se define la entidad
+        line: Número de línea donde inicia la entidad
+        end_line: Número de línea donde termina la entidad (opcional)
+        parent: ID de la entidad padre si está anidada (opcional)
+        children: Lista de IDs de entidades hijo (opcional)
+        methods: Lista de nombres de métodos para entidades de clase
+        parameters: Lista de nombres de parámetros para funciones/métodos
+        decorators: Lista de decoradores aplicados a la entidad
+        imports: Lista de módulos/símbolos importados
+        docstring: Cadena de documentación si existe
+        loc: Líneas de código para esta entidad
+        complexity: Complejidad ciclomática (default: 1)
     """
 
     id: str
@@ -69,13 +69,13 @@ class Entity:
 
 @dataclass
 class CallEdge:
-    """Represents a call relationship between entities.
+    """Representa una relación de llamada entre entidades.
 
-    Attributes:
-        from_id: ID of the calling entity
-        to_id: ID of the called entity
-        call_type: Type of call (direct_call, callback, inheritance, etc.)
-        line: Line number where the call occurs
+    Atributos:
+        from_id: ID de la entidad que llama
+        to_id: ID de la entidad llamada
+        call_type: Tipo de llamada (direct_call, callback, inheritance, etc.)
+        line: Número de línea donde ocurre la llamada
     """
 
     from_id: str
@@ -86,13 +86,13 @@ class CallEdge:
 
 @dataclass
 class Dependency:
-    """Represents a module dependency.
+    """Representa una dependencia de módulo.
 
-    Attributes:
-        source_module: Module that has the dependency
-        target_module: Module being depended upon
-        symbols: List of specific symbols imported/used
-        dependency_type: Type of dependency (import, require, inheritance, etc.)
+    Atributos:
+        source_module: Módulo que tiene la dependencia
+        target_module: Módulo del que depende
+        symbols: Lista de símbolos específicos importados/usados
+        dependency_type: Tipo de dependencia (import, require, inheritance, etc.)
     """
 
     source_module: str
@@ -103,25 +103,25 @@ class Dependency:
 
 @dataclass
 class ParseResult:
-    """Result of parsing a single file.
+    """Resultado del análisis de un solo archivo.
 
-    Contains all extracted information including entities, calls,
-    dependencies, and metrics.
+    Contiene toda la información extraída incluyendo entidades, llamadas,
+    dependencias y métricas.
 
-    Attributes:
-        file: Absolute path to the parsed file
-        language: Detected programming language
-        entities: List of extracted entities
-        calls: List of call relationships
-        dependencies: List of module dependencies
-        metrics: Dictionary of computed metrics
-        errors: List of error messages encountered during parsing
+    Atributos:
+        file: Ruta absoluta del archivo analizado
+        language: Lenguaje de programación detectado
+        entities: Lista de entidades extraídas
+        calls: Lista de relaciones de llamada
+        dependencies: Lista de dependencias de módulos
+        metrics: Diccionario de métricas calculadas
+        errors: Lista de mensajes de error encontrados durante el análisis
 
-    Example:
-        >>> result = parser.parse_file(Path("user.py"))
-        >>> len(result.entities)
+    Ejemplo:
+        >>> resultado = parser.parse_file(Path("user.py"))
+        >>> len(resultado.entidades)
         5
-        >>> result.metrics["total_loc"]
+        >>> resultado.metrics["total_loc"]
         150
     """
 
@@ -135,20 +135,20 @@ class ParseResult:
 
 
 class BaseASTParser(ABC):
-    """Abstract base class for AST parsers.
+    """Clase base abstracta para parsers de AST.
 
-    All language-specific parsers must inherit from this class
-    and implement the required methods.
+    Todos los parsers específicos de un lenguaje deben heredar de esta clase
+    e implementar los métodos requeridos.
 
-    Subclasses should:
-    1. Set SUPPORTED_LANGUAGES class attribute
-    2. Implement parse_file() to parse from file path
-    3. Implement parse_content() to parse from string content
+    Las subclases deben:
+    1. Definir el atributo de clase SUPPORTED_LANGUAGES
+    2. Implementar parse_file() para analizar desde ruta de archivo
+    3. Implementar parse_content() para analizar desde contenido string
 
-    Attributes:
-        entity_counter: Internal counter for generating unique entity IDs.
+    Atributos:
+        entity_counter: Contador interno para generar IDs únicos de entidades.
 
-    Example:
+    Ejemplo:
         >>> class PythonParser(BaseASTParser):
         ...     SUPPORTED_LANGUAGES = ["python"]
         ...
@@ -157,7 +157,7 @@ class BaseASTParser(ABC):
         ...         return self.parse_content(content, file_path)
         ...
         ...     def parse_content(self, content, file_path):
-        ...         # Implementation here
+        ...         # Implementación aquí
         ...         return ParseResult(...)
     """
 
@@ -168,48 +168,48 @@ class BaseASTParser(ABC):
 
     @abstractmethod
     def parse_file(self, file_path: Path) -> ParseResult:
-        """Parse a single file and return entities, calls, and dependencies.
+        """Analiza un solo archivo y devuelve entidades, llamadas y dependencias.
 
         Args:
-            file_path: Path to the file to parse.
+            file_path: Ruta al archivo a analizar.
 
         Returns:
-            ParseResult containing all extracted information.
+            ParseResult con toda la información extraída.
 
         Raises:
-            NotImplementedError: Must be implemented by subclass.
+            NotImplementedError: Debe ser implementado por la subclase.
         """
         pass
 
     @abstractmethod
     def parse_content(self, content: str, file_path: Path) -> ParseResult:
-        """Parse file content directly without reading from disk.
+        """Analiza contenido de archivo directamente sin leer del disco.
 
         Args:
-            content: Raw file content as string.
-            file_path: Path object for reference (may not exist).
+            content: Contenido del archivo como string.
+            file_path: Objeto Path para referencia (puede no existir).
 
         Returns:
-            ParseResult containing all extracted information.
+            ParseResult con toda la información extraída.
 
         Raises:
-            NotImplementedError: Must be implemented by subclass.
+            NotImplementedError: Debe ser implementado por la subclase.
         """
         pass
 
     def generate_entity_id(self, entity_type: str, name: str) -> str:
-        """Generate a unique entity ID.
+        """Genera un ID único para una entidad.
 
-        Uses format "type:name" with an incrementing counter.
+        Usa el formato "tipo:nombre" con un contador incremental.
 
         Args:
-            entity_type: Type of entity (class, function, method, etc.)
-            name: Name of the entity.
+            entity_type: Tipo de entidad (class, function, method, etc.)
+            name: Nombre de la entidad.
 
         Returns:
-            Unique identifier string.
+            Identificador único como string.
 
-        Example:
+        Ejemplo:
             >>> self.generate_entity_id("class", "User")
             'class:User'
             >>> self.generate_entity_id("function", "save")
@@ -219,25 +219,25 @@ class BaseASTParser(ABC):
         return f"{entity_type}:{name}"
 
     def read_file(self, file_path: Path) -> Optional[str]:
-        """Read file content safely using parser utilities.
+        """Lee el contenido de un archivo de forma segura.
 
         Args:
-            file_path: Path to the file to read.
+            file_path: Ruta al archivo a leer.
 
         Returns:
-            File contents as string, or None if reading fails.
+            Contenido del archivo como string, o None si falla la lectura.
         """
         return parser_utils.read_file_safe(file_path)
 
     def extract_docstring(self, content: str, start_line: int) -> Optional[str]:
-        """Extract docstring from content starting at line.
+        """Extrae docstring del contenido comenzando en una línea.
 
         Args:
-            content: Full file content.
-            start_line: Line number (1-indexed) to start searching.
+            content: Contenido completo del archivo.
+            start_line: Número de línea (1-indexed) donde comenzar a buscar.
 
         Returns:
-            Docstring text if found, None otherwise.
+            Texto del docstring si se encuentra, None en caso contrario.
         """
         lines = content.split("\n")
         if start_line - 1 < len(lines):

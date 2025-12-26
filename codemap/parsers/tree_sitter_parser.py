@@ -1,28 +1,28 @@
-"""Tree-sitter parser wrapper for CodeMap.
+"""Wrapper de parser tree-sitter para CodeMap.
 
-Provides multi-language parsing capabilities using tree-sitter.
-Supports Python, JavaScript, TypeScript, Java, Go, Rust, C++, Ruby, and PHP.
+Proporciona capacidades de análisis multi-lenguaje usando tree-sitter.
+Soporta Python, JavaScript, TypeScript, Java, Go, Rust, C++, Ruby y PHP.
 
-Features
---------
-- Language detection from file extension
-- Entity extraction (classes, functions, methods)
-- Call graph construction
-- Dependency analysis
-- Basic metrics calculation
+Características
+---------------
+- Detección de lenguaje desde extensión de archivo
+- Extracción de entidades (clases, funciones, métodos)
+- Construcción de call graph
+- Análisis de dependencias
+- Cálculo básico de métricas
 
-Example
+Ejemplo
 -------
 >>> from pathlib import Path
 >>> from codemap.parsers import TreeSitterParser
 >>> parser = TreeSitterParser()
->>> result = parser.parse_file(Path("example.py"))
->>> for entity in result.entities:
-...     print(f"{entity.type}: {entity.name}")
+>>> resultado = parser.parse_file(Path("ejemplo.py"))
+>>> for entidad in resultado.entidades:
+...     print(f"{entidad.tipo}: {entidad.nombre}")
 
-Dependencies
+Dependencias
 ------------
-Requires tree-sitter and tree-sitter-libraries packages:
+Requiere los paquetes tree-sitter y tree-sitter-libraries:
     pip install tree-sitter tree-sitter-languages
 """
 
@@ -51,13 +51,13 @@ from codemap.parsers import utils as parser_utils
 
 @dataclass
 class TreeSitterEntity(Entity):
-    """Entity extracted from tree-sitter AST.
+    """Entidad extraída del AST de tree-sitter.
 
-    Extends Entity with tree-sitter-specific fields.
+    Extiende Entity con campos específicos de tree-sitter.
 
-    Attributes:
-        node_type: Raw tree-sitter node type (e.g., 'function_definition')
-        is_definition: True if this is a definition node
+    Atributos:
+        node_type: Tipo de nodo raw de tree-sitter (ej: 'function_definition')
+        is_definition: True si es un nodo de definición
     """
 
     node_type: str = ""
@@ -65,13 +65,13 @@ class TreeSitterEntity(Entity):
 
 
 class TreeSitterParser(BaseASTParser):
-    """Multi-language parser using tree-sitter.
+    """Parser multi-lenguaje usando tree-sitter.
 
-    Parses source code files and extracts entities, calls, and dependencies
-    using tree-sitter's language-agnostic AST representation.
+    Analiza archivos de código fuente y extrae entidades, llamadas y dependencias
+    usando la representación de AST agnóstico del lenguaje de tree-sitter.
 
-    Supported Languages
-    -------------------
+    Lenguajes Soportados
+    --------------------
     - Python (.py)
     - JavaScript (.js, .jsx)
     - TypeScript (.ts, .tsx)
@@ -82,14 +82,14 @@ class TreeSitterParser(BaseASTParser):
     - Ruby (.rb)
     - PHP (.php)
 
-    Attributes:
-        parsers: Dictionary mapping language names to tree-sitter parsers.
+    Atributos:
+        parsers: Diccionario que mapea nombres de lenguaje a parsers de tree-sitter.
 
-    Example:
+    Ejemplo:
         >>> parser = TreeSitterParser()
         >>> if parser.is_available():
-        ...     result = parser.parse_file(Path("main.py"))
-        ...     print(f"Found {len(result.entities)} entities")
+        ...     resultado = parser.parse_file(Path("main.py"))
+        ...     print(f"Encontradas {len(resultado.entidades)} entidades")
     """
 
     LANGUAGE_CONFIG: Dict[str, str] = {
@@ -126,16 +126,16 @@ class TreeSitterParser(BaseASTParser):
     }
 
     def __init__(self):
-        """Initialize parser and load language parsers."""
+        """Inicializa el parser y carga los parsers de lenguaje."""
         super().__init__()
         self.parsers: Dict[str, Parser] = {}
         self._load_languages()
 
     def _load_languages(self):
-        """Load tree-sitter language parsers.
+        """Carga los parsers de lenguaje de tree-sitter.
 
-        Attempts to load all configured language parsers using
-        tree_sitter_languages for efficient parser retrieval.
+        Intenta cargar todos los parsers de lenguaje configurados usando
+        tree_sitter_languages para una recuperación eficiente del parser.
         """
         if not TREE_SITTER_AVAILABLE:
             return
@@ -149,41 +149,39 @@ class TreeSitterParser(BaseASTParser):
             pass
 
     def is_available(self) -> bool:
-        """Check if tree-sitter is properly installed and configured.
+        """Verifica si tree-sitter está correctamente instalado.
 
         Returns:
-            True if tree-sitter is available and at least one language
-            parser is loaded.
+            True si tree-sitter está disponible y al menos un parser
+            de lenguaje está cargado.
         """
         return TREE_SITTER_AVAILABLE and len(self.parsers) > 0
 
     def parse_file(self, file_path: Path) -> ParseResult:
-        """Parse a file using tree-sitter.
+        """Analiza un archivo usando tree-sitter.
 
         Args:
-            file_path: Path to the file to parse.
+            file_path: Ruta al archivo a analizar.
 
         Returns:
-            ParseResult containing extracted entities, calls, dependencies,
-            and metrics.
+            ParseResult con entidades, llamadas, dependencias y métricas extraídas.
         """
         content = self.read_file(file_path)
         if content is None:
             return ParseResult(
-                file=str(file_path), language="unknown", errors=["Could not read file"]
+                file=str(file_path), language="unknown", errors=["No se pudo leer el archivo"]
             )
         return self.parse_content(content, file_path)
 
     def parse_content(self, content: str, file_path: Path) -> ParseResult:
-        """Parse file content using tree-sitter.
+        """Analiza contenido de archivo usando tree-sitter.
 
         Args:
-            content: Raw source code content.
-            file_path: Path object for reference (language detection).
+            content: Contenido del código fuente.
+            file_path: Objeto Path para referencia (detección de lenguaje).
 
         Returns:
-            ParseResult containing extracted entities, calls, dependencies,
-            and metrics.
+            ParseResult con entidades, llamadas, dependencias y métricas extraídas.
         """
         result = ParseResult(
             file=str(file_path),
@@ -191,12 +189,12 @@ class TreeSitterParser(BaseASTParser):
         )
 
         if not TREE_SITTER_AVAILABLE:
-            result.errors.append("tree-sitter not available")
+            result.errors.append("tree-sitter no disponible")
             return result
 
         parser = self.parsers.get(result.language)
         if parser is None:
-            result.errors.append(f"No parser for language: {result.language}")
+            result.errors.append(f"No hay parser para el lenguaje: {result.language}")
             return result
 
         try:
@@ -210,21 +208,19 @@ class TreeSitterParser(BaseASTParser):
 
         return result
 
-    def _extract_entities(
-        self, node, content: str, file_path: Path
-    ) -> List[TreeSitterEntity]:
-        """Extract entity definitions from AST.
+    def _extract_entities(self, node, content: str, file_path: Path) -> List[TreeSitterEntity]:
+        """Extrae definiciones de entidades del AST.
 
-        Recursively traverses the AST to find all definition nodes
-        (functions, classes, methods).
+        Recorre recursivamente el AST para encontrar todos los nodos de
+        definición (funciones, clases, métodos).
 
         Args:
-            node: Current tree-sitter node.
-            content: Source code content for line extraction.
-            file_path: File path for entity metadata.
+            node: Nodo actual de tree-sitter.
+            content: Contenido del código fuente para extracción de líneas.
+            file_path: Ruta del archivo para metadatos de entidad.
 
         Returns:
-            List of extracted TreeSitterEntity objects.
+            Lista de objetos TreeSitterEntity extraídos.
         """
         entities = []
         lines = content.split("\n")
@@ -239,18 +235,16 @@ class TreeSitterParser(BaseASTParser):
 
         return entities
 
-    def _node_to_entity(
-        self, node, content: str, file_path: Path
-    ) -> Optional[TreeSitterEntity]:
-        """Convert a tree-sitter node to an Entity.
+    def _node_to_entity(self, node, content: str, file_path: Path) -> Optional[TreeSitterEntity]:
+        """Convierte un nodo de tree-sitter a una Entidad.
 
         Args:
-            node: Tree-sitter node to convert.
-            content: Source code content.
-            file_path: File path for entity metadata.
+            node: Nodo de tree-sitter a convertir.
+            content: Contenido del código fuente.
+            file_path: Ruta del archivo para metadatos de entidad.
 
         Returns:
-            TreeSitterEntity if conversion successful, None otherwise.
+            TreeSitterEntity si la conversión fue exitosa, None en caso contrario.
         """
         name = self._extract_name(node, content)
         if not name:
@@ -280,14 +274,14 @@ class TreeSitterParser(BaseASTParser):
         )
 
     def _extract_name(self, node, content: str) -> Optional[str]:
-        """Extract entity name from node.
+        """Extrae el nombre de la entidad del nodo.
 
         Args:
-            node: Tree-sitter node.
-            content: Source code content.
+            node: Nodo de tree-sitter.
+            content: Contenido del código fuente.
 
         Returns:
-            Entity name if found, None otherwise.
+            Nombre de la entidad si se encuentra, None en caso contrario.
         """
         lines = content.split("\n")
 
@@ -304,13 +298,13 @@ class TreeSitterParser(BaseASTParser):
         return None
 
     def _map_node_type(self, node_type: str) -> str:
-        """Map tree-sitter node types to entity types.
+        """Mapea tipos de nodo de tree-sitter a tipos de entidad.
 
         Args:
-            node_type: Raw tree-sitter node type string.
+            node_type: String del tipo de nodo raw de tree-sitter.
 
         Returns:
-            Mapped entity type (class, function, method, etc.)
+            Tipo de entidad mapeado (class, function, method, etc.)
         """
         type_map = {
             "function_definition": "function",
@@ -323,14 +317,14 @@ class TreeSitterParser(BaseASTParser):
         return type_map.get(node_type, "function")
 
     def _extract_docstring_from_node(self, node, content: str) -> Optional[str]:
-        """Extract docstring from node.
+        """Extrae docstring del nodo.
 
         Args:
-            node: Tree-sitter node.
-            content: Source code content.
+            node: Nodo de tree-sitter.
+            content: Contenido del código fuente.
 
         Returns:
-            Docstring text if found, None otherwise.
+            Texto del docstring si se encuentra, None en caso contrario.
         """
         lines = content.split("\n")
         start_line = node.start_point[0]
@@ -345,14 +339,14 @@ class TreeSitterParser(BaseASTParser):
         return None
 
     def _extract_calls(self, node, content: str) -> List[CallEdge]:
-        """Extract function calls from AST.
+        """Extrae llamadas a funciones del AST.
 
         Args:
-            node: Current tree-sitter node.
-            content: Source code content.
+            node: Nodo actual de tree-sitter.
+            content: Contenido del código fuente.
 
         Returns:
-            List of CallEdge objects representing function calls.
+            Lista de objetos CallEdge representando las llamadas a funciones.
         """
         calls = []
 
@@ -367,14 +361,14 @@ class TreeSitterParser(BaseASTParser):
         return calls
 
     def _node_to_call(self, node, content: str) -> Optional[CallEdge]:
-        """Convert a call node to a CallEdge.
+        """Convierte un nodo de llamada a un CallEdge.
 
         Args:
-            node: Tree-sitter node representing a call.
-            content: Source code content.
+            node: Nodo de tree-sitter representando una llamada.
+            content: Contenido del código fuente.
 
         Returns:
-            CallEdge if conversion successful, None otherwise.
+            CallEdge si la conversión fue exitosa, None en caso contrario.
         """
         lines = content.split("\n")
         line = node.start_point[0] + 1
@@ -394,14 +388,14 @@ class TreeSitterParser(BaseASTParser):
         return None
 
     def _extract_dependencies(self, node, content: str) -> List[Dependency]:
-        """Extract module dependencies from AST.
+        """Extrae dependencias de módulos del AST.
 
         Args:
-            node: Current tree-sitter node.
-            content: Source code content.
+            node: Nodo actual de tree-sitter.
+            content: Contenido del código fuente.
 
         Returns:
-            List of Dependency objects.
+            Lista de objetos Dependency.
         """
         deps = []
 
@@ -416,14 +410,14 @@ class TreeSitterParser(BaseASTParser):
         return deps
 
     def _node_to_dependency(self, node, content: str) -> Optional[Dependency]:
-        """Convert import node to Dependency.
+        """Convierte nodo de import a Dependency.
 
         Args:
-            node: Tree-sitter node representing an import.
-            content: Source code content.
+            node: Nodo de tree-sitter representando un import.
+            content: Contenido del código fuente.
 
         Returns:
-            Dependency if conversion successful, None otherwise.
+            Dependency si la conversión fue exitosa, None en caso contrario.
         """
         lines = content.split("\n")
 
@@ -441,19 +435,19 @@ class TreeSitterParser(BaseASTParser):
         return None
 
     def _compute_metrics(self, content: str, entities: List[Entity]) -> Dict[str, Any]:
-        """Compute metrics for the parsed content.
+        """Calcula métricas para el contenido analizado.
 
         Args:
-            content: Source code content.
-            entities: List of extracted entities.
+            content: Contenido del código fuente.
+            entities: Lista de entidades extraídas.
 
         Returns:
-            Dictionary containing metrics:
-            - total_loc: Total lines including empty/comment lines
-            - code_loc: Lines of actual code
-            - entity_count: Number of entities found
-            - total_complexity: Sum of entity complexities
-            - avg_complexity: Average complexity per entity
+            Diccionario conteniendo métricas:
+            - total_loc: Total de líneas incluyendo vacías/comentarios
+            - code_loc: Líneas de código real
+            - entity_count: Número de entidades encontradas
+            - total_complexity: Suma de complejidades de entidades
+            - avg_complexity: Complejidad promedio por entidad
         """
         total_loc = parser_utils.count_lines(content)
         code_loc = parser_utils.count_lines_of_code(content)
@@ -494,7 +488,7 @@ class TreeSitterParser(BaseASTParser):
         self._load_languages()
 
     def _load_languages(self):
-        """Load tree-sitter language parsers."""
+        """Carga los parsers de lenguaje de tree-sitter."""
         if not TREE_SITTER_AVAILABLE:
             return
 
@@ -507,32 +501,32 @@ class TreeSitterParser(BaseASTParser):
             pass
 
     def is_available(self) -> bool:
-        """Check if tree-sitter is available."""
+        """Verifica si tree-sitter está disponible."""
         return TREE_SITTER_AVAILABLE and len(self.parsers) > 0
 
     def parse_file(self, file_path: Path) -> ParseResult:
-        """Parse a file using tree-sitter."""
+        """Analiza un archivo usando tree-sitter."""
         content = self.read_file(file_path)
         if content is None:
             return ParseResult(
-                file=str(file_path), language="unknown", errors=["Could not read file"]
+                file=str(file_path), language="unknown", errors=["No se pudo leer el archivo"]
             )
         return self.parse_content(content, file_path)
 
     def parse_content(self, content: str, file_path: Path) -> ParseResult:
-        """Parse file content using tree-sitter."""
+        """Analiza contenido de archivo usando tree-sitter."""
         result = ParseResult(
             file=str(file_path),
             language=parser_utils.detect_language(file_path) or "unknown",
         )
 
         if not TREE_SITTER_AVAILABLE:
-            result.errors.append("tree-sitter not available")
+            result.errors.append("tree-sitter no disponible")
             return result
 
         parser = self.parsers.get(result.language)
         if parser is None:
-            result.errors.append(f"No parser for language: {result.language}")
+            result.errors.append(f"No hay parser para el lenguaje: {result.language}")
             return result
 
         try:
@@ -546,10 +540,8 @@ class TreeSitterParser(BaseASTParser):
 
         return result
 
-    def _extract_entities(
-        self, node, content: str, file_path: Path
-    ) -> List[TreeSitterEntity]:
-        """Extract entity definitions from AST."""
+    def _extract_entities(self, node, content: str, file_path: Path) -> List[TreeSitterEntity]:
+        """Extrae definiciones de entidades del AST."""
         entities = []
         lines = content.split("\n")
 
@@ -563,10 +555,8 @@ class TreeSitterParser(BaseASTParser):
 
         return entities
 
-    def _node_to_entity(
-        self, node, content: str, file_path: Path
-    ) -> Optional[TreeSitterEntity]:
-        """Convert a tree-sitter node to an Entity."""
+    def _node_to_entity(self, node, content: str, file_path: Path) -> Optional[TreeSitterEntity]:
+        """Convierte un nodo de tree-sitter a una Entidad."""
         name = self._extract_name(node, content)
         if not name:
             return None
@@ -595,7 +585,7 @@ class TreeSitterParser(BaseASTParser):
         )
 
     def _extract_name(self, node, content: str) -> Optional[str]:
-        """Extract entity name from node."""
+        """Extrae el nombre de la entidad del nodo."""
         lines = content.split("\n")
 
         for child in node.children:
@@ -611,7 +601,7 @@ class TreeSitterParser(BaseASTParser):
         return None
 
     def _map_node_type(self, node_type: str) -> str:
-        """Map tree-sitter node types to entity types."""
+        """Mapea tipos de nodo de tree-sitter a tipos de entidad."""
         type_map = {
             "function_definition": "function",
             "function_declaration": "function",
@@ -623,7 +613,7 @@ class TreeSitterParser(BaseASTParser):
         return type_map.get(node_type, "function")
 
     def _extract_docstring_from_node(self, node, content: str) -> Optional[str]:
-        """Extract docstring from node."""
+        """Extrae docstring del nodo."""
         lines = content.split("\n")
         start_line = node.start_point[0]
 
@@ -637,7 +627,7 @@ class TreeSitterParser(BaseASTParser):
         return None
 
     def _extract_calls(self, node, content: str) -> List[CallEdge]:
-        """Extract function calls from AST."""
+        """Extrae llamadas a funciones del AST."""
         calls = []
 
         for child in node.children:
@@ -651,7 +641,7 @@ class TreeSitterParser(BaseASTParser):
         return calls
 
     def _node_to_call(self, node, content: str) -> Optional[CallEdge]:
-        """Convert a call node to a CallEdge."""
+        """Convierte un nodo de llamada a un CallEdge."""
         lines = content.split("\n")
         line = node.start_point[0] + 1
 
@@ -670,7 +660,7 @@ class TreeSitterParser(BaseASTParser):
         return None
 
     def _extract_dependencies(self, node, content: str) -> List[Dependency]:
-        """Extract module dependencies from AST."""
+        """Extrae dependencias de módulos del AST."""
         deps = []
 
         for child in node.children:
@@ -684,7 +674,7 @@ class TreeSitterParser(BaseASTParser):
         return deps
 
     def _node_to_dependency(self, node, content: str) -> Optional[Dependency]:
-        """Convert import node to Dependency."""
+        """Convierte nodo de import a Dependency."""
         lines = content.split("\n")
 
         for child in node.children:
@@ -701,7 +691,7 @@ class TreeSitterParser(BaseASTParser):
         return None
 
     def _compute_metrics(self, content: str, entities: List[Entity]) -> Dict[str, Any]:
-        """Compute metrics for the parsed content."""
+        """Calcula métricas para el contenido analizado."""
         total_loc = parser_utils.count_lines(content)
         code_loc = parser_utils.count_lines_of_code(content)
 
