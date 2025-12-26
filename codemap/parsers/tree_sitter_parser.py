@@ -20,10 +20,11 @@ Ejemplo
 >>> for entidad in resultado.entidades:
 ...     print(f"{entidad.tipo}: {entidad.nombre}")
 
-Dependencias
-------------
-Requiere los paquetes tree-sitter y tree-sitter-libraries:
-    pip install tree-sitter tree-sitter-languages
+    Dependencias
+    ------------
+    Requiere tree-sitter y los paquetes de lenguajes:
+        pip install tree-sitter
+        pip install tree-sitter-python tree-sitter-javascript tree-sitter-typescript
 """
 
 from pathlib import Path
@@ -32,7 +33,7 @@ from dataclasses import dataclass, field
 
 try:
     import tree_sitter
-    from tree_sitter import Parser
+    from tree_sitter import Language, Parser
 
     TREE_SITTER_AVAILABLE = True
 except ImportError:
@@ -91,6 +92,19 @@ class TreeSitterParser(BaseASTParser):
         ...     print(f"Encontradas {len(resultado.entidades)} entidades")
     """
 
+    LANGUAGE_MODULES: Dict[str, str] = {
+        "python": "tree_sitter_python",
+        "javascript": "tree_sitter_javascript",
+        "typescript": "tree_sitter_typescript",
+        "java": "tree_sitter_java",
+        "go": "tree_sitter_go",
+        "rust": "tree_sitter_rust",
+        "cpp": "tree_sitter_cpp",
+        "c": "tree_sitter_c",
+        "ruby": "tree_sitter_ruby",
+        "php": "tree_sitter_php",
+    }
+
     LANGUAGE_CONFIG: Dict[str, str] = {
         "python": "python",
         "javascript": "javascript",
@@ -133,19 +147,20 @@ class TreeSitterParser(BaseASTParser):
     def _load_languages(self):
         """Carga los parsers de lenguaje de tree-sitter.
 
-        Intenta cargar todos los parsers de lenguaje configurados usando
-        tree_sitter_languages para una recuperación eficiente del parser.
+        Intenta cargar los parsers de lenguaje disponibles.
+        Requiere instalar los paquetes de lenguajes:
+        pip install tree-sitter-python tree-sitter-javascript tree-sitter-typescript
         """
         if not TREE_SITTER_AVAILABLE:
             return
 
-        try:
-            from tree_sitter_languages import get_language, get_parser
-
-            for lang, _ in self.LANGUAGE_CONFIG.items():
-                self.parsers[lang] = get_parser(lang)
-        except Exception:
-            pass
+        for lang, module_name in self.LANGUAGE_MODULES.items():
+            try:
+                module = __import__(module_name, fromlist=["language"])
+                language = Language(module.language())
+                self.parsers[lang] = Parser(language)
+            except (ImportError, AttributeError):
+                pass
 
     def is_available(self) -> bool:
         """Verifica si tree-sitter está correctamente instalado.
