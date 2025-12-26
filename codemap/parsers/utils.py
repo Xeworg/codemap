@@ -101,6 +101,7 @@ def get_file_encoding(file_path: Path) -> str:
     """Detecta la codificación del archivo, usando UTF-8 por defecto.
 
     Usa la biblioteca chardet si está disponible para una detección precisa.
+    Limita la lectura a 64KB para eficiencia.
 
     Args:
         file_path: Ruta al archivo a verificar.
@@ -113,10 +114,18 @@ def get_file_encoding(file_path: Path) -> str:
         import chardet
 
         with open(file_path, "rb") as f:
-            result = chardet.detect(f.read(1024 * 1024))
+            # 64KB es suficiente para detección de codificación
+            data = f.read(64 * 1024)
+            if not data:
+                return "utf-8"
+            result = chardet.detect(data)
             encoding = result.get("encoding")
-            return encoding if encoding else "utf-8"
-    except ImportError:
+            confidence = result.get("confidence", 0)
+            # Solo usar detección si confidence >= 50%
+            if encoding and confidence >= 0.5:
+                return encoding
+            return "utf-8"
+    except (ImportError, OSError):
         return "utf-8"
 
 

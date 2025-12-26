@@ -119,7 +119,7 @@ class ParseResult:
 
     Ejemplo:
         >>> resultado = parser.parse_file(Path("user.py"))
-        >>> len(resultado.entidades)
+        >>> len(resultado.entities)
         5
         >>> resultado.metrics["total_loc"]
         150
@@ -201,6 +201,7 @@ class BaseASTParser(ABC):
         """Genera un ID único para una entidad.
 
         Usa el formato "tipo:nombre" con un contador incremental.
+        El nombre se sanitiza reemplazando ":" por "_" para evitar ambigüedad.
 
         Args:
             entity_type: Tipo de entidad (class, function, method, etc.)
@@ -215,8 +216,10 @@ class BaseASTParser(ABC):
             >>> self.generate_entity_id("function", "save")
             'function:save'
         """
+        # Escapar ":" en el nombre para evitar ambigüedad en el formato "tipo:nombre"
+        safe_name = name.replace(":", "_")
         self.entity_counter += 1
-        return f"{entity_type}:{name}"
+        return f"{entity_type}:{safe_name}"
 
     def read_file(self, file_path: Path) -> Optional[str]:
         """Lee el contenido de un archivo de forma segura.
@@ -232,18 +235,37 @@ class BaseASTParser(ABC):
     def extract_docstring(self, content: str, start_line: int) -> Optional[str]:
         """Extrae docstring del contenido comenzando en una línea.
 
+        Maneja docstrings de una línea y multi-línea.
+
         Args:
             content: Contenido completo del archivo.
-            start_line: Número de línea (1-indexed) donde comenzar a buscar.
+            start_line: Número de línea (1-indexed) donde comenzar.
 
         Returns:
             Texto del docstring si se encuentra, None en caso contrario.
         """
         lines = content.split("\n")
-        if start_line - 1 < len(lines):
-            line = lines[start_line - 1].strip()
-            if line.startswith('"""') or line.startswith("'''"):
-                end_marker = line[3:]
-                if end_marker and not end_marker.startswith("\\"):
-                    return line[3:-3]
+        if start_line - 1 >= len(lines):
+            return None
+
+        line = lines[start_line - 1].strip()
+
+        # Docstring de una línea: """texto"""
+        if (line.startswith('"""') or line.startswith("'''")):
+            quote = line[:3]
+            # Caso: """contenido""" (docstring en una línea)
+            inner = line[3:]
+            if inner and not inner.startswith("\\"):
+                closing = inner.find(quote)
+                if closing != -1:
+                    return inner[:closing].strip()
+
+            # Caso: """ (solo abre) - buscar closing marker
+            if not inner or inner == "\\":
+                for i, next_line in enumerate(lines[start_line:], start_line):
+                    if quote in next_line:
+                        doc_lines = lines[start_line : i + 1]
+                        full_doc = "\n".join(doc_lines)
+                        return full_doc.strip().strip(quote).strip()
+
         return None
