@@ -20,11 +20,11 @@ Ejemplo
 >>> for entidad in resultado.entidades:
 ...     print(f"{entidad.tipo}: {entidad.nombre}")
 
-    Dependencias
-    ------------
-    Requiere tree-sitter y los paquetes de lenguajes:
-        pip install tree-sitter
-        pip install tree-sitter-python tree-sitter-javascript tree-sitter-typescript
+Dependencias
+------------
+Requiere tree-sitter y los paquetes de lenguajes:
+    pip install tree-sitter
+    pip install tree-sitter-python tree-sitter-javascript tree-sitter-typescript
 """
 
 from pathlib import Path
@@ -32,8 +32,6 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 
 from tree_sitter import Language, Parser
-
-TREE_SITTER_AVAILABLE = True
 
 from codemap.parsers.ast_parser import (
     BaseASTParser,
@@ -83,9 +81,8 @@ class TreeSitterParser(BaseASTParser):
 
     Ejemplo:
         >>> parser = TreeSitterParser()
-        >>> if parser.is_available():
-        ...     resultado = parser.parse_file(Path("main.py"))
-        ...     print(f"Encontradas {len(resultado.entidades)} entidades")
+        >>> resultado = parser.parse_file(Path("main.py"))
+        >>> print(f"Encontradas {len(resultado.entidades)} entidades")
     """
 
     LANGUAGE_MODULES: Dict[str, str] = {
@@ -99,19 +96,6 @@ class TreeSitterParser(BaseASTParser):
         "c": "tree_sitter_c",
         "ruby": "tree_sitter_ruby",
         "php": "tree_sitter_php",
-    }
-
-    LANGUAGE_CONFIG: Dict[str, str] = {
-        "python": "python",
-        "javascript": "javascript",
-        "typescript": "typescript",
-        "java": "java",
-        "go": "go",
-        "rust": "rust",
-        "cpp": "cpp",
-        "c": "c",
-        "ruby": "ruby",
-        "php": "php",
     }
 
     DEFINITION_TYPES = {
@@ -143,13 +127,9 @@ class TreeSitterParser(BaseASTParser):
     def _load_languages(self):
         """Carga los parsers de lenguaje de tree-sitter.
 
-        Intenta cargar los parsers de lenguaje disponibles.
         Requiere instalar los paquetes de lenguajes:
         pip install tree-sitter-python tree-sitter-javascript tree-sitter-typescript
         """
-        if not TREE_SITTER_AVAILABLE:
-            return
-
         for lang, module_name in self.LANGUAGE_MODULES.items():
             try:
                 module = __import__(module_name, fromlist=["language"])
@@ -159,13 +139,12 @@ class TreeSitterParser(BaseASTParser):
                 pass
 
     def is_available(self) -> bool:
-        """Verifica si tree-sitter está correctamente instalado.
+        """Verifica si hay parsers de lenguaje cargados.
 
         Returns:
-            True si tree-sitter está disponible y al menos un parser
-            de lenguaje está cargado.
+            True si al menos un parser de lenguaje está cargado.
         """
-        return TREE_SITTER_AVAILABLE and len(self.parsers) > 0
+        return len(self.parsers) > 0
 
     def parse_file(self, file_path: Path) -> ParseResult:
         """Analiza un archivo usando tree-sitter.
@@ -198,23 +177,16 @@ class TreeSitterParser(BaseASTParser):
             language=parser_utils.detect_language(file_path) or "unknown",
         )
 
-        if not TREE_SITTER_AVAILABLE:
-            result.errors.append("tree-sitter no disponible")
-            return result
-
         parser = self.parsers.get(result.language)
         if parser is None:
             result.errors.append(f"No hay parser para el lenguaje: {result.language}")
             return result
 
-        try:
-            tree = parser.parse(bytes(content, "utf-8"))
-            result.entities = self._extract_entities(tree.root_node, content, file_path)
-            result.calls = self._extract_calls(tree.root_node, content)
-            result.dependencies = self._extract_dependencies(tree.root_node, content)
-            result.metrics = self._compute_metrics(content, result.entities)
-        except Exception as e:
-            result.errors.append(str(e))
+        tree = parser.parse(bytes(content, "utf-8"))
+        result.entities = self._extract_entities(tree.root_node, content, file_path)
+        result.calls = self._extract_calls(tree.root_node, content)
+        result.dependencies = self._extract_dependencies(tree.root_node, content)
+        result.metrics = self._compute_metrics(content, result.entities)
 
         return result
 
