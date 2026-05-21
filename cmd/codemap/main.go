@@ -60,6 +60,15 @@ func main() {
 	case "history":
 		exitCode = runWithHelp(ctx, stdout, stderr, "history", subargs, repoRoot,
 			func() int { return cli.RunHistory(ctx, stdout, subargs, repoRoot) })
+	case "migrate":
+		exitCode = runWithHelp(ctx, stdout, stderr, "migrate", subargs, repoRoot,
+			func() int { return cli.RunMigrate(ctx, stdout, subargs, repoRoot) })
+	case "impact":
+		exitCode = runWithHelp(ctx, stdout, stderr, "impact", subargs, repoRoot,
+			func() int { return cli.RunImpact(ctx, stdout, subargs, repoRoot) })
+	case "query":
+		exitCode = runWithHelp(ctx, stdout, stderr, "query", subargs, repoRoot,
+			func() int { return cli.RunQuery(ctx, stdout, subargs, repoRoot) })
 	case "install":
 		exitCode = runInstall(ctx, stdout, stderr, subargs)
 	case "doctor":
@@ -195,6 +204,9 @@ func helpRoot(w io.Writer) {
 	fmt.Fprintf(w, "  codemap index       Scan and index a Go repository\n")
 	fmt.Fprintf(w, "  codemap symbol      Query a symbol by name\n")
 	fmt.Fprintf(w, "  codemap history     Query commit history for a symbol\n")
+	fmt.Fprintf(w, "  codemap migrate     Run pending schema migrations\n")
+	fmt.Fprintf(w, "  codemap impact      Show symbols impacted by a given symbol\n")
+	fmt.Fprintf(w, "  codemap query       Look up symbols by name or prefix\n")
 	fmt.Fprintf(w, "  codemap install     Install codemap skill and tool into Pi runtime\n")
 	fmt.Fprintf(w, "  codemap doctor      Diagnose codemap environment and integration\n")
 	fmt.Fprintf(w, "\nUse 'codemap help <command>' for per-command usage.\n")
@@ -225,6 +237,25 @@ func helpFor(cmd string, w io.Writer) {
 		fmt.Fprintf(w, "Flags:\n")
 		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
 		fmt.Fprintf(w, "\nExample:\n  codemap history MyFunction\n")
+	case "migrate":
+		fmt.Fprintf(w, "Usage: codemap migrate [flags]\n\n")
+		fmt.Fprintf(w, "Run pending schema migrations on the database.\n\n")
+		fmt.Fprintf(w, "Flags:\n")
+		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap migrate -db myrepo.db\n  codemap migrate               # uses default cache path\n")
+	case "impact":
+		fmt.Fprintf(w, "Usage: codemap impact [flags] <symbol>\n\n")
+		fmt.Fprintf(w, "Show symbols that depend on or relate to the given symbol, with evidence.\n\n")
+		fmt.Fprintf(w, "Flags:\n")
+		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap impact MyFunction\n  codemap impact --db myrepo.db MyFunction\n")
+	case "query":
+		fmt.Fprintf(w, "Usage: codemap query [flags] <term>\n\n")
+		fmt.Fprintf(w, "Look up symbols by exact name or prefix. Returns deterministic JSON.\n\n")
+		fmt.Fprintf(w, "Flags:\n")
+		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
+		fmt.Fprintf(w, "  --json      Output JSON envelope (default, implicit)\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap query MyFunction\n  codemap query --db myrepo.db Foo\n")
 	case "install":
 		fmt.Fprintf(w, "Usage: codemap install [flags]\n\n")
 		fmt.Fprintf(w, "Install or update the codemap skill and tool into Pi runtime.\n\n")

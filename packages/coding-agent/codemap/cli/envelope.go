@@ -60,6 +60,35 @@ type IndexData struct {
 	Evidence     []EvidenceEntry `json:"evidence"`
 }
 
+// MigrateData is the data payload for a migrate command result.
+type MigrateData struct {
+	MigrationsApplied bool   `json:"migrations_applied"`
+	VersionBefore     string `json:"version_before"`
+	VersionAfter      string `json:"version_after"`
+}
+
+// ImpactData is the data payload for an impact query.
+type ImpactData struct {
+	TargetSymbol    string          `json:"target_symbol"`
+	AffectedSymbols []string        `json:"affected_symbols"`
+	Evidence        []EvidenceEntry `json:"evidence"`
+}
+
+// QueryData is the data payload for a query command.
+type QueryData struct {
+	Query   string       `json:"query"`
+	Matches []QueryMatch `json:"matches"`
+	Count   int          `json:"count"`
+}
+
+// QueryMatch represents a single symbol match in a query result.
+type QueryMatch struct {
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	File      string `json:"file"`
+	Signature string `json:"signature,omitempty"`
+}
+
 // NewEnvelope builds a response envelope with the required v1.0 structure.
 func NewEnvelope(cmd string, ok bool, data interface{}, errs []string, meta Meta) *Envelope {
 	if errs == nil {

@@ -1,9 +1,9 @@
 ---
 title: codemap-usage
-trigger: symbol lookup, code navigation, function search, refactor, bug context, commit history, understanding code structure
+trigger: symbol lookup, code navigation, function search, impact analysis, text query, migration, refactor, bug context, commit history, understanding code structure
 scope: project
 version: 1.0
-description: Use CodeMap to query Go symbols, definitions, and commit history before editing or reasoning about code.
+description: Use CodeMap to query Go symbols, definitions, impact, textual matches, and commit history before editing or reasoning about code.
 ---
 
 # CodeMap Usage Skill
@@ -17,6 +17,9 @@ Call CodeMap whenever you need to:
 3. **Check commit history** of a symbol to understand changes
 4. **Debug or refactor** with evidence of how/when code evolved
 5. **Verify a symbol exists** before creating new one with same name
+6. **Estimate change impact** (related callers/callees/edges) before edits
+7. **Run global textual query** when the question is broad
+8. **Run explicit migration** when schema state is uncertain
 
 ## Command sequence for coding tasks
 
@@ -39,6 +42,25 @@ codemap history <name>  # get commit history with link strength
 codemap index
 codemap symbol <target>
 codemap history <target>
+codemap impact <target>
+```
+
+### When estimating blast radius
+
+```bash
+codemap impact <name>   # related graph/evidence for likely affected areas
+```
+
+### When question is broad/open-ended
+
+```bash
+codemap query "<text>"  # deterministic JSON search over indexed entities
+```
+
+### When schema state is uncertain
+
+```bash
+codemap migrate         # explicit schema migration command
 ```
 
 ### Installing codemap into Pi runtime
@@ -64,7 +86,7 @@ codemap doctor --json    # machine-readable diagnostic output
 
 ## Auto-index fallback
 
-If `symbol` or `history` returns "no index found":
+If `symbol`, `history`, `impact`, or `query` returns "no index found":
 1. Run `codemap index` first
 2. Re-run the original query
 
@@ -89,7 +111,7 @@ All commands return deterministic JSON with this envelope:
 ```json
 {
   "schema_version": "1.0",
-  "command": "index|symbol|history|install|doctor",
+  "command": "index|symbol|history|impact|query|migrate|install|doctor",
   "ok": true,
   "data": { ... },
   "errors": [],
