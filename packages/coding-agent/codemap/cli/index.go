@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"codrut/packages/coding-agent/codemap/indexer"
 	"codrut/packages/coding-agent/codemap/store"
@@ -73,6 +72,26 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 		return 1
 	}
 
+	// No-op: no files changed, new, or deleted — skip snapshot creation.
+	if len(result.Entries) == 0 && result.FilesDeleted == 0 {
+		envelope := NewEnvelope("index", true, IndexData{
+			SnapshotID:   meta.SnapshotID,
+			FilesScanned: result.FilesScanned,
+			FilesParsed:  result.FilesParsed,
+			SymbolsFound: result.SymbolsFound,
+			ParseErrors:  result.ParseErrors,
+			Evidence:     nil,
+		}, nil, Meta{
+			SnapshotID: meta.SnapshotID,
+			HeadRef:    meta.HeadRef,
+			IndexedAt:  meta.IndexedAt,
+			IsStale:    false,
+		})
+		out, _ := envelope.Encode()
+		_, _ = w.Write(out)
+		return 0
+	}
+
 	// Persist snapshot + files + symbols under transaction.
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -116,8 +135,8 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 
 	// Emit JSON envelope.
 	metaOut, _ := store.GetLatestSnapshotMeta(ctx, db.DB)
-	now := time.Now().UTC().Format(time.RFC3339)
 	envelope := NewEnvelope("index", true, IndexData{
+		SnapshotID:   metaOut.SnapshotID,
 		FilesScanned: result.FilesScanned,
 		FilesParsed:  result.FilesParsed,
 		SymbolsFound: result.SymbolsFound,
@@ -126,7 +145,7 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 	}, nil, Meta{
 		SnapshotID: metaOut.SnapshotID,
 		HeadRef:    metaOut.HeadRef,
-		IndexedAt:  now,
+		IndexedAt:  metaOut.IndexedAt,
 		IsStale:    false,
 	})
 	out, _ := envelope.Encode()

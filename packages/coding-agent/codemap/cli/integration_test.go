@@ -110,15 +110,36 @@ func TestIntegrationIndexIdempotent(t *testing.T) {
 		t.Fatalf("second index failed: %s", buf2.String())
 	}
 
-	// Both should succeed. Snapshot IDs should differ.
+	// Both should succeed. Snapshot IDs should be the same on no-op reindex.
 	var env1, env2 map[string]interface{}
 	json.Unmarshal(buf1.Bytes(), &env1)
 	json.Unmarshal(buf2.Bytes(), &env2)
 	data1 := env1["data"].(map[string]interface{})
 	data2 := env2["data"].(map[string]interface{})
 
-	if data1["snapshot_id"] == data2["snapshot_id"] {
-		t.Log("snapshot_id unchanged on second run (may be correct if no files changed)")
+	id1 := int(data1["snapshot_id"].(float64))
+	id2 := int(data2["snapshot_id"].(float64))
+	if id1 != id2 {
+		t.Errorf("second index created a new snapshot on no-op run: id1=%d, id2=%d", id1, id2)
+	}
+
+	// Symbol query must still work after no-op reindex.
+	symBuf := &bytes.Buffer{}
+	code := RunSymbol(context.Background(), symBuf, []string{"--db", dbPath, "Valid"}, "")
+	if code != 0 {
+		t.Fatalf("symbol failed after no-op reindex: %s", symBuf.String())
+	}
+	var symEnv map[string]interface{}
+	json.Unmarshal(symBuf.Bytes(), &symEnv)
+	if symEnv["ok"] != true {
+		t.Errorf("symbol should succeed after no-op reindex, got ok=%v", symEnv["ok"])
+	}
+	metaSym, ok := symEnv["meta"].(map[string]interface{})
+	if !ok {
+		t.Fatal("symbol response missing meta")
+	}
+	if int(metaSym["snapshot_id"].(float64)) != id1 {
+		t.Errorf("symbol snapshot_id should match no-op index snapshot: got %v, want %d", metaSym["snapshot_id"], id1)
 	}
 	if _, err := os.Stat(dbPath); err != nil {
 		t.Fatal("DB should exist after second index")

@@ -52,6 +52,7 @@ type EvidenceEntry struct {
 
 // IndexData is the data payload for an index run result.
 type IndexData struct {
+	SnapshotID   int64           `json:"snapshot_id,omitempty"`
 	FilesScanned int             `json:"files_scanned"`
 	FilesParsed  int             `json:"files_parsed"`
 	SymbolsFound int             `json:"symbols_found"`
