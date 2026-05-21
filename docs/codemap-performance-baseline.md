@@ -43,7 +43,7 @@ TestPerfParseErrorDoesNotAbort           PASS  — parse error counted, run comp
 
 1. **Unchanged reindex is ~44% faster than full scan** (~33 µs vs ~58 µs). Incremental diff logic is effective even on a tiny fixture. The delta grows proportionally with repo size.
 
-2. **One-file-change reindex is ~12× more expensive than unchanged reindex** (~702 µs vs ~33 µs). This includes file mutation inside the benchmark loop, which inflates the number. Real-world changed reindex is expected to be closer to full scan (parse cost dominates).
+2. **One-file-change reindex** now uses a stable reset-restore cycle: original content is restored before each iteration, then one small delta is applied, then the result hashes are used as the next prevFiles. This measures a consistent unit of work (one file changed, one parse) rather than accumulating mutations across iterations.
 
 3. **Vendor exclusion is working correctly**: `TestPerfFileDiscoveryExcludesVendor` passes, ensuring large `vendor/` directories do not inflate scan cost.
 
