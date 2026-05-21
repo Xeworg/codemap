@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"testing"
-	"time"
 
 	"codrut/packages/coding-agent/codemap/indexer"
 )
@@ -63,15 +62,14 @@ func TestHistoryIntegration(t *testing.T) {
 	}
 
 	// Link symbol to both commits with different strengths.
-	now := time.Now().UTC().Format(time.RFC3339)
 	tx3, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatalf("begin tx3: %v", err)
 	}
-	if err := UpsertSymbolCommit(ctx, tx3, symID, "111111", "weak", now); err != nil {
+	if err := UpsertSymbolCommit(ctx, tx3, symID, "111111", "weak", "modify"); err != nil {
 		t.Fatalf("upsert symbol commit weak: %v", err)
 	}
-	if err := UpsertSymbolCommit(ctx, tx3, symID, "222222", "strong", now); err != nil {
+	if err := UpsertSymbolCommit(ctx, tx3, symID, "222222", "strong", "add"); err != nil {
 		t.Fatalf("upsert symbol commit strong: %v", err)
 	}
 	if err := tx3.Commit(); err != nil {

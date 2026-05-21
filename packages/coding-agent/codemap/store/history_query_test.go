@@ -87,7 +87,7 @@ func TestGetSymbolHistoryWithEntries(t *testing.T) {
 	}
 
 	// Link symbol to two commits with different strengths.
-	_, err = db.Exec(`INSERT INTO symbol_commits(symbol_id, commit_hash, change_type, link_strength) VALUES (1, 'h1', 'modify', 'weak'), (1, 'h2', 'modify', 'strong')`)
+	_, err = db.Exec(`INSERT INTO symbol_commits(symbol_id, commit_hash, change_type, link_strength) VALUES (1, 'h1', 'modify', 'weak'), (1, 'h2', 'add', 'strong')`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,6 +105,13 @@ func TestGetSymbolHistoryWithEntries(t *testing.T) {
 	}
 	if entries[1].LinkStrength != "weak" {
 		t.Errorf("second entry should be weak, got %v", entries[1].LinkStrength)
+	}
+	// Validate change_type values are meaningful (not empty/default).
+	if entries[0].ChangeType != "add" {
+		t.Errorf("first entry change_type should be 'add', got %q", entries[0].ChangeType)
+	}
+	if entries[1].ChangeType != "modify" {
+		t.Errorf("second entry change_type should be 'modify', got %q", entries[1].ChangeType)
 	}
 }
 
