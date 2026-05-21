@@ -19,7 +19,7 @@ Chain strategy: stacked-to-main
 ## PR1 — Installer/Doctor closure under strict TDD
 Dependencies: existing install core + TUI + doctor baseline
 
-- [ ] 1. **RED: installer/doctor behavioral gaps tests**
+- [x] 1. **RED: installer/doctor behavioral gaps tests**
   - Add/extend failing tests in:
     - `packages/coding-agent/codemap/cli/installer/install_test.go`
     - `packages/coding-agent/codemap/cli/installer/doctor_test.go`
@@ -29,27 +29,27 @@ Dependencies: existing install core + TUI + doctor baseline
     - unreadable template/source warning surfacing
     - deterministic doctor PASS/WARN/FAIL aggregation
 
-- [ ] 2. **GREEN: implement installer/doctor hardening**
+- [x] 2. **GREEN: implement installer/doctor hardening**
   - Implement minimal changes in:
     - `cmd/codemap/main.go`
     - `packages/coding-agent/codemap/cli/installer/install.go`
     - `packages/coding-agent/codemap/cli/installer/doctor.go`
   - Keep JSON contracts deterministic (`install --json`, `doctor --json`).
 
-- [ ] 3. **TRIANGULATE + REFACTOR: idempotent rerun matrix**
+- [x] 3. **TRIANGULATE + REFACTOR: idempotent rerun matrix**
   - Add/extend tests for rerun states (dry-run → applied → up-to-date).
   - Refactor shared check rendering/helpers only if covered by passing tests.
 
 ## PR2 — Operator docs + integration contract lock
 Dependencies: PR1
 
-- [ ] 4. **RED: docs contract drift checks (manual + fixture assertions where present)**
+- [x] 4. **RED: docs contract drift checks (manual + fixture assertions where present)**
   - Validate documented flags and output fields against executable behavior for:
     - `codemap install`
     - `codemap doctor`
     - DB default/override precedence
 
-- [ ] 5. **GREEN: update operator docs to match runtime behavior**
+- [x] 5. **GREEN: update operator docs to match runtime behavior**
   - Update/add:
     - `docs/codemap-cli-json-contract.md`
     - `docs/codemap-performance-baseline.md` (only if references changed)
@@ -59,7 +59,7 @@ Dependencies: PR1
     - doctor human/json
     - index/symbol/history with implicit default DB.
 
-- [ ] 6. **TRIANGULATE + REFACTOR: install artifact consistency checks**
+- [x] 6. **TRIANGULATE + REFACTOR: install artifact consistency checks**
   - Verify and adjust integration templates if needed:
     - `integrations/pi/tools/codemap-tool.json`
     - `integrations/pi/skills/codemap-usage/SKILL.md`
@@ -68,7 +68,7 @@ Dependencies: PR1
 ## PR3 — Final verification checklist + archive readiness
 Dependencies: PR2
 
-- [ ] 7. **Strict verification checklist (must pass before archive)**
+- [x] 7. **Strict verification checklist (must pass before archive)**
   - Execute and capture outputs:
     - `go test -count=1 ./...`
     - `go build ./cmd/codemap`
@@ -80,12 +80,12 @@ Dependencies: PR2
     - `codemap index` (no `--db`)
     - `codemap symbol <known-symbol>` (no `--db`)
 
-- [ ] 8. **Write final verify artifact**
+- [x] 8. **Write final verify artifact**
   - Create/update:
     - `openspec/changes/codemap-pi-integration-v1-complete/verify-report.md`
   - Include pass/fail table, command evidence, and any residual non-blocking risks.
 
-- [ ] 9. **Archive readiness criteria (must all be true)**
+- [x] 9. **Archive readiness criteria (must all be true)**
   - `proposal.md`, `spec.md`, `design.md`, `tasks.md`, `verify-report.md` present and coherent.
   - No failing tests/build in latest verification run.
   - Installer and doctor JSON contracts documented and matching outputs.

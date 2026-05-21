@@ -10,8 +10,6 @@ Define deterministic installation and diagnostics behavior for integrating CodeM
 
 The system MUST provide `codemap install` with `--dry-run`, `--json`, and `--tui` modes.
 
-The system MUST support `--yes` compatibility for non-interactive apply flows.
-
 #### Scenario: Dry-run reports planned actions without applying
 
 - GIVEN integration templates are present in the repository
