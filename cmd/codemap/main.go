@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"codrut/packages/coding-agent/codemap/cli"
+	"codrut/packages/coding-agent/codemap/cli/installer"
 )
 
 var repoFlag string
@@ -58,6 +59,8 @@ func main() {
 	case "history":
 		exitCode = runWithHelp(ctx, stdout, stderr, "history", subargs, repoRoot,
 			func() int { return cli.RunHistory(ctx, stdout, subargs, repoRoot) })
+	case "install":
+		exitCode = runInstall(ctx, stdout, subargs)
 	default:
 		helpRoot(stderr)
 		fmt.Fprintf(stderr, "\nError: unknown command %q.\n\n", cmd)
@@ -67,7 +70,56 @@ func main() {
 	os.Exit(exitCode)
 }
 
-// runWithHelp handles per-command help flags without pre-parsing command args.
+// runInstall handles the install command (non-interactive core).
+func runInstall(ctx context.Context, stdout io.Writer, subargs []string) int {
+	fs := flag.NewFlagSet("install", flag.ContinueOnError)
+	fs.SetOutput(stdout)
+	fs.Usage = func() { helpFor("install", stdout) }
+	dryRun := fs.Bool("dry-run", false, "Check and report planned actions without applying")
+	jsonOutput := fs.Bool("json", false, "Output machine-readable JSON")
+	yes := fs.Bool("yes", false, "Skip prompts and apply immediately")
+	_ = yes // reserved; no interactive prompts in core yet
+	if err := fs.Parse(subargs); err != nil {
+		return 2
+	}
+
+	repoRoot, err := detectRepoRoot()
+	if err != nil {
+		fmt.Fprintf(stdout, "Error: %v\n", err)
+		return 1
+	}
+
+	inst := installer.DefaultInstaller(repoRoot)
+	inst.DryRun = *dryRun
+	inst.JSONOutput = *jsonOutput
+
+	result := inst.Run()
+
+	if *jsonOutput {
+		fmt.Fprintln(stdout, result.JSON())
+	} else {
+		fmt.Fprintln(stdout, result.Print())
+	}
+
+	switch result.Status {
+	case "applied", "up-to-date", "dry-run":
+		return 0
+	case "error":
+		return 1
+	default:
+		return 1
+	}
+}
+
+// detectRepoRoot finds the nearest git root or uses current directory.
+func detectRepoRoot() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return cwd, nil
+}
+
 func runWithHelp(ctx context.Context, stdout, stderr io.Writer, cmd string, subargs []string, repoRoot string, run func() int) int {
 	_ = ctx
 	_ = repoRoot
@@ -90,6 +142,7 @@ func helpRoot(w io.Writer) {
 	fmt.Fprintf(w, "  codemap index       Scan and index a Go repository\n")
 	fmt.Fprintf(w, "  codemap symbol      Query a symbol by name\n")
 	fmt.Fprintf(w, "  codemap history     Query commit history for a symbol\n")
+	fmt.Fprintf(w, "  codemap install     Install codemap skill and tool into Pi runtime\n")
 	fmt.Fprintf(w, "\nUse 'codemap help <command>' for per-command usage.\n")
 	fmt.Fprintf(w, "\nExamples:\n")
 	fmt.Fprintf(w, "  codemap index --db myrepo.db\n")
@@ -117,7 +170,15 @@ func helpFor(cmd string, w io.Writer) {
 		fmt.Fprintf(w, "Return commit history for a symbol, ordered by link strength.\n\n")
 		fmt.Fprintf(w, "Flags:\n")
 		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
-		fmt.Fprintf(w, "\nExample:\n  codemap history -db myrepo.db MyFunction  # custom path\n  codemap history MyFunction                    # uses default cache path\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap history MyFunction\n")
+	case "install":
+		fmt.Fprintf(w, "Usage: codemap install [flags]\n\n")
+		fmt.Fprintf(w, "Install or update the codemap skill and tool into Pi runtime.\n\n")
+		fmt.Fprintf(w, "Flags:\n")
+		fmt.Fprintf(w, "  --dry-run     Check and report actions without applying\n")
+		fmt.Fprintf(w, "  --json        Output machine-readable JSON\n")
+		fmt.Fprintf(w, "  --yes         Apply without prompts\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap install          # apply\n  codemap install --dry-run # preview\n  codemap install --json     # JSON output\n")
 	default:
 		fmt.Fprintf(w, "No help available for %q.\n", cmd)
 	}
