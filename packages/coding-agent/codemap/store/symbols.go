@@ -27,8 +27,18 @@ func ReplaceFileSymbols(ctx context.Context, db *sql.Tx, fileID int64, symbols [
 		return nil, nil
 	}
 
-	// Delete old symbol+edge rows for this file.
+	// Delete old symbol_commits, edges, and symbol rows for this file.
+	// We delete symbol_commits explicitly because the FK from symbol_commits
+	// to symbols has no ON DELETE CASCADE (and SQLite FK enforcement is OFF).
 	_, err := db.ExecContext(ctx,
+		`DELETE FROM symbol_commits WHERE symbol_id IN
+		 (SELECT id FROM symbols WHERE file_id = ?)`,
+		fileID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("delete symbol_commits: %w", err)
+	}
+	_, err = db.ExecContext(ctx,
 		`DELETE FROM edges WHERE from_symbol_id IN
 		 (SELECT id FROM symbols WHERE file_id = ?)`,
 		fileID,

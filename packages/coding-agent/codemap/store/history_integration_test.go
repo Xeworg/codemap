@@ -94,6 +94,95 @@ func TestHistoryIntegration(t *testing.T) {
 	}
 }
 
+// TestReplaceFileSymbolsDeletesCommits verifies that ReplaceFileSymbols also
+// removes symbol_commits for the deleted symbols. Without this, re-indexing
+// a file leaves orphaned symbol_commits rows in the DB.
+func TestReplaceFileSymbolsDeletesCommits(t *testing.T) {
+	ctx := context.Background()
+	db := MustTempDB(t)
+	defer db.Close()
+	if err := Migrate(ctx, db.DB); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	// Create snapshot.
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	snapID, err := BeginSnapshot(ctx, tx, "/repo", "refs/heads/main")
+	if err != nil {
+		t.Fatalf("begin snapshot: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	// Insert file + symbol.
+	tx2, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin tx2: %v", err)
+	}
+	fileID, err := UpsertFile(ctx, tx2, "/repo", "pkg/foo.go", "go", "abc123", snapID)
+	if err != nil {
+		t.Fatalf("upsert file: %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("commit tx2: %v", err)
+	}
+
+	symIDs, err := ReplaceFileSymbolsWithTx(ctx, db.DB, fileID, []indexer.Symbol{
+		{Name: "MyFunc", Kind: "func", Signature: "func MyFunc()", StartLine: 1, EndLine: 5},
+	})
+	if err != nil {
+		t.Fatalf("replace symbols: %v", err)
+	}
+	symID := symIDs[0]
+
+	// Insert a commit and link the symbol to it.
+	if err := EnsureCommitForDB(ctx, db.DB, "333333", "author", "2026-05-01T10:00:00Z", "link symbol"); err != nil {
+		t.Fatalf("ensure commit: %v", err)
+	}
+	tx3, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin tx3: %v", err)
+	}
+	if err := UpsertSymbolCommit(ctx, tx3, symID, "333333", "strong", "add"); err != nil {
+		t.Fatalf("upsert symbol commit: %v", err)
+	}
+	if err := tx3.Commit(); err != nil {
+		t.Fatalf("commit tx3: %v", err)
+	}
+
+	// Verify the link exists.
+	var countBefore int
+	row := db.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM symbol_commits WHERE symbol_id = ?", symID)
+	if err := row.Scan(&countBefore); err != nil {
+		t.Fatalf("count before: %v", err)
+	}
+	if countBefore != 1 {
+		t.Fatalf("expected 1 symbol_commit before re-index, got %d", countBefore)
+	}
+
+	// Re-index: call ReplaceFileSymbols again with a different symbol set.
+	_, err = ReplaceFileSymbolsWithTx(ctx, db.DB, fileID, []indexer.Symbol{
+		{Name: "NewFunc", Kind: "func", Signature: "func NewFunc()", StartLine: 1, EndLine: 5},
+	})
+	if err != nil {
+		t.Fatalf("replace symbols (re-index): %v", err)
+	}
+
+	// The old symbol_commits row must be gone.
+	var countAfter int
+	row = db.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM symbol_commits WHERE symbol_id = ?", symID)
+	if err := row.Scan(&countAfter); err != nil {
+		t.Fatalf("count after: %v", err)
+	}
+	if countAfter != 0 {
+		t.Errorf("expected 0 symbol_commits for deleted symbol, got %d (orphaned rows remain)", countAfter)
+	}
+}
+
 // TestEnsureCommitIdempotent verifies EnsureCommitForDB is safe to call twice.
 func TestEnsureCommitIdempotent(t *testing.T) {
 	ctx := context.Background()
