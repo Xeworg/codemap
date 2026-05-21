@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"codrut/packages/coding-agent/codemap/cli"
 	"codrut/packages/coding-agent/codemap/cli/installer"
@@ -117,7 +118,17 @@ func detectRepoRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return cwd, nil
+	cur := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(cur, ".git")); err == nil {
+			return cur, nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return cwd, nil
+		}
+		cur = parent
+	}
 }
 
 func runWithHelp(ctx context.Context, stdout, stderr io.Writer, cmd string, subargs []string, repoRoot string, run func() int) int {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // TemplateKind identifies the type of integration artifact.
@@ -34,9 +35,11 @@ type InstallResult struct {
 
 // CheckResult describes a pre-flight check.
 type CheckResult struct {
-	Name   string `json:"name"`
-	Passed bool   `json:"passed"`
-	Info   string `json:"info,omitempty"`
+	Name    string `json:"name"`
+	Passed  bool   `json:"passed"`
+	Exists  *bool  `json:"exists,omitempty"` // present for runtime checks; nil for others
+	Info    string `json:"info,omitempty"`
+	Skipped string `json:"skipped,omitempty"` // reason skipped, if not run
 }
 
 // ActionResult describes an action taken or planned.
@@ -90,10 +93,7 @@ func (i *Installer) Templates() []TemplateRef {
 // Run executes pre-flight checks and (if not dry-run) applies install actions.
 func (i *Installer) Run() *InstallResult {
 	result := &InstallResult{
-		Timestamp: strings.ReplaceAll(fmt.Sprintf("%v", os.Getenv("GOTOOLCHAIN")), " ", "T"),
-	}
-	if result.Timestamp == "" {
-		result.Timestamp = "now"
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 
 	// Preflight checks
@@ -142,6 +142,8 @@ func (i *Installer) Run() *InstallResult {
 }
 
 // runChecks performs pre-flight checks.
+// It only fails for real blockers: unreadable template sources, or home dir inaccessible.
+// Missing Pi runtime directory is reported as a notice (passed=true) so first installs proceed.
 func (i *Installer) runChecks() []CheckResult {
 	var results []CheckResult
 
@@ -158,25 +160,50 @@ func (i *Installer) runChecks() []CheckResult {
 		Info:   integrationsDir,
 	})
 
-	// Check each template exists in source
+	// Check each template exists in source (real blocker: can't read source)
 	for _, t := range i.Templates() {
-		results = append(results, CheckResult{
-			Name:   "template_" + string(t.Kind),
-			Passed: fileExists(t.Source),
-			Info:   t.Source,
-		})
+		if src, err := os.ReadFile(t.Source); err != nil {
+			results = append(results, CheckResult{
+				Name:   "template_" + string(t.Kind),
+				Passed: false,
+				Info:   t.Source,
+			})
+		} else if len(src) == 0 {
+			// Empty source is a blocker: nothing to copy
+			results = append(results, CheckResult{
+				Name:   "template_" + string(t.Kind),
+				Passed: false,
+				Info:   t.Source + " (empty file)",
+			})
+		} else {
+			results = append(results, CheckResult{
+				Name:   "template_" + string(t.Kind),
+				Passed: true,
+				Info:   t.Source,
+			})
+		}
 	}
 
-	// Check Pi runtime dir is accessible: exists, or parent exists (installer creates via MkdirAll).
-	// We use a simple heuristic: the home dir component must be reachable.
-	// This avoids false failures when running from a test tmpdir that lacks a real ~/.pi.
-	piParent := filepath.Dir(i.PiRuntimeBase)
-	homeDir := filepath.Dir(piParent)
-	checkPassed := dirExists(i.PiRuntimeBase) || (dirExists(piParent) && dirExists(homeDir))
+	// Check Pi runtime: report existence explicitly but do not block on absence.
+	// Block only if home directory is unreadable (real permission/path issue).
+	_, homeErr := os.UserHomeDir()
+	piRuntimeExists := dirExists(i.PiRuntimeBase)
+	runtimePassed := true
+	runtimeInfo := i.PiRuntimeBase
+	var existsVal bool = piRuntimeExists
+
+	if homeErr != nil {
+		// Cannot determine home dir — this is a real blocker
+		runtimePassed = false
+		runtimeInfo = "home directory unreadable: " + homeErr.Error()
+		existsVal = false
+	}
+
 	results = append(results, CheckResult{
 		Name:   "pi_runtime",
-		Passed: checkPassed,
-		Info:   i.PiRuntimeBase,
+		Passed: runtimePassed,
+		Exists: &existsVal,
+		Info:   runtimeInfo,
 	})
 
 	return results
@@ -268,6 +295,7 @@ func needsCopy(src, dst string) bool {
 	}
 	srcData, err := os.ReadFile(src)
 	if err != nil {
+		// Real I/O error on source — treat as unknown, skip copy to avoid silent data loss.
 		return false
 	}
 	dstData, err := os.ReadFile(dst)
