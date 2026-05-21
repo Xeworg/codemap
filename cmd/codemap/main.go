@@ -62,6 +62,8 @@ func main() {
 			func() int { return cli.RunHistory(ctx, stdout, subargs, repoRoot) })
 	case "install":
 		exitCode = runInstall(ctx, stdout, stderr, subargs)
+	case "doctor":
+		exitCode = runDoctor(ctx, stdout, stderr, subargs)
 	default:
 		helpRoot(stderr)
 		fmt.Fprintf(stderr, "\nError: unknown command %q.\n\n", cmd)
@@ -140,6 +142,37 @@ func resolveRepoRoot() string {
 	return repoRoot
 }
 
+func runDoctor(ctx context.Context, stdout io.Writer, stderr io.Writer, subargs []string) int {
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	fs.SetOutput(stdout)
+	fs.Usage = func() { helpFor("doctor", stdout) }
+	jsonOutput := fs.Bool("json", false, "Output machine-readable JSON")
+	if err := fs.Parse(subargs); err != nil {
+		return 2
+	}
+
+	doctor := installer.DefaultDoctor()
+	repoRoot := resolveRepoRoot()
+	doctor.Installer = installer.DefaultInstaller(repoRoot)
+
+	result := doctor.Run()
+
+	if *jsonOutput {
+		fmt.Fprintln(stdout, result.JSON())
+	} else {
+		fmt.Fprintln(stdout, result.Print())
+	}
+
+	switch result.Status {
+	case "pass":
+		return 0
+	case "warn":
+		return 0
+	default:
+		return 1
+	}
+}
+
 func runWithHelp(ctx context.Context, stdout, stderr io.Writer, cmd string, subargs []string, repoRoot string, run func() int) int {
 	_ = ctx
 	_ = repoRoot
@@ -163,6 +196,7 @@ func helpRoot(w io.Writer) {
 	fmt.Fprintf(w, "  codemap symbol      Query a symbol by name\n")
 	fmt.Fprintf(w, "  codemap history     Query commit history for a symbol\n")
 	fmt.Fprintf(w, "  codemap install     Install codemap skill and tool into Pi runtime\n")
+	fmt.Fprintf(w, "  codemap doctor      Diagnose codemap environment and integration\n")
 	fmt.Fprintf(w, "\nUse 'codemap help <command>' for per-command usage.\n")
 	fmt.Fprintf(w, "\nExamples:\n")
 	fmt.Fprintf(w, "  codemap index --db myrepo.db\n")
@@ -200,6 +234,14 @@ func helpFor(cmd string, w io.Writer) {
 		fmt.Fprintf(w, "  --tui         Run interactive TUI installer\n")
 		fmt.Fprintf(w, "  --yes         Apply without prompts (only with --tui)\n")
 		fmt.Fprintf(w, "\nExample:\n  codemap install          # apply\n  codemap install --dry-run # preview\n  codemap install --tui     # TUI installer\n")
+	case "doctor":
+		fmt.Fprintf(w, "Usage: codemap doctor [flags]\n\n")
+		fmt.Fprintf(w, "Diagnose the codemap environment and Pi integration status.\n\n")
+		fmt.Fprintf(w, "Flags:\n")
+		fmt.Fprintf(w, "  --json        Output machine-readable JSON\n")
+		fmt.Fprintf(w, "\nExample:\n")
+		fmt.Fprintf(w, "  codemap doctor            # human-readable report\n")
+		fmt.Fprintf(w, "  codemap doctor --json     # JSON for automation\n")
 	default:
 		fmt.Fprintf(w, "No help available for %q.\n", cmd)
 	}
