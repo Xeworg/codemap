@@ -165,11 +165,10 @@ func TestSymbolCmdReturnsSymbolData(t *testing.T) {
 }
 
 func TestSymbolCmdExitCode2JSONEnvelope(t *testing.T) {
-	// GREEN: validation errors emit JSON envelope with ok:false and errors[]
-	tmp := t.TempDir()
-	db := filepath.Join(tmp, "test.db")
+	// validation errors emit JSON envelope with ok:false and errors[]
+	// No --db flag; uses default cache path. Trigger validation by omitting symbol arg.
 	buf := &bytes.Buffer{}
-	code := RunSymbol(context.Background(), buf, []string{"--db", db, ""}, "")
+	code := RunSymbol(context.Background(), buf, []string{}, "")
 	if code != 2 {
 		t.Errorf("expected exit 2, got %d", code)
 	}

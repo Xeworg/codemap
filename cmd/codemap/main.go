@@ -104,20 +104,20 @@ func helpFor(cmd string, w io.Writer) {
 		fmt.Fprintf(w, "Usage: codemap index [flags]\n\n")
 		fmt.Fprintf(w, "Scan and index all Go source files in a repository.\n\n")
 		fmt.Fprintf(w, "Flags:\n")
-		fmt.Fprintf(w, "  -db path    Path to SQLite database (required)\n")
-		fmt.Fprintf(w, "\nExample:\n  codemap index --db myrepo.db\n")
+		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap index -db myrepo.db  # custom path\n  codemap index                # uses default cache path\n")
 	case "symbol":
 		fmt.Fprintf(w, "Usage: codemap symbol [flags] <name>\n\n")
 		fmt.Fprintf(w, "Look up a symbol by name and return its definition.\n\n")
 		fmt.Fprintf(w, "Flags:\n")
-		fmt.Fprintf(w, "  -db path    Path to SQLite database (required)\n")
-		fmt.Fprintf(w, "\nExample:\n  codemap symbol --db myrepo.db MyFunction\n")
+		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap symbol -db myrepo.db MyFunction  # custom path\n  codemap symbol MyFunction                  # uses default cache path\n")
 	case "history":
 		fmt.Fprintf(w, "Usage: codemap history [flags] <name>\n\n")
 		fmt.Fprintf(w, "Return commit history for a symbol, ordered by link strength.\n\n")
 		fmt.Fprintf(w, "Flags:\n")
-		fmt.Fprintf(w, "  -db path    Path to SQLite database (required)\n")
-		fmt.Fprintf(w, "\nExample:\n  codemap history --db myrepo.db MyFunction\n")
+		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap history -db myrepo.db MyFunction  # custom path\n  codemap history MyFunction                    # uses default cache path\n")
 	default:
 		fmt.Fprintf(w, "No help available for %q.\n", cmd)
 	}

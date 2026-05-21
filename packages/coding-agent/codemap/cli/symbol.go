@@ -13,7 +13,7 @@ func RunSymbol(ctx context.Context, w io.Writer, args []string, repoRoot string)
 	fs := flag.NewFlagSet("symbol", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
-	dbPath := fs.String("db", "", "Path to SQLite database (required)")
+	dbPathFlag := fs.String("db", "", "Path to SQLite database (optional)")
 	_ = fs.Bool("json", false, "Output JSON envelope (default)")
 	if err := fs.Parse(args); err != nil {
 		WriteErrorEnvelope(w, "symbol", err.Error(), EmptyMeta())
@@ -26,16 +26,17 @@ func RunSymbol(ctx context.Context, w io.Writer, args []string, repoRoot string)
 	}
 
 	// Validation.
-	if *dbPath == "" {
-		WriteErrorEnvelope(w, "symbol", "--db flag required", EmptyMeta())
-		return 2
-	}
 	if symbolArg == "" {
 		WriteErrorEnvelope(w, "symbol", "symbol name or ID required", EmptyMeta())
 		return 2
 	}
 
-	db, err := store.Open(*dbPath)
+	dbPath, err := ResolveDBPath(*dbPathFlag, repoRoot)
+	if err != nil {
+		WriteErrorEnvelope(w, "symbol", "resolve db path: "+err.Error(), EmptyMeta())
+		return 1
+	}
+	db, err := store.Open(dbPath)
 	if err != nil {
 		WriteErrorEnvelope(w, "symbol", "open db: "+err.Error(), EmptyMeta())
 		return 1

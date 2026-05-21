@@ -20,7 +20,7 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 	fs := flag.NewFlagSet("index", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
-	dbPath := fs.String("db", "", "Path to SQLite database (required)")
+	dbPathFlag := fs.String("db", "", "Path to SQLite database (optional)")
 	if err := fs.Parse(args); err != nil {
 		WriteErrorEnvelope(w, "index", err.Error(), EmptyMeta())
 		return 2 // validation
@@ -36,12 +36,12 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 		return 1 // runtime
 	}
 
-	// Validate/open DB.
-	if *dbPath == "" {
-		WriteErrorEnvelope(w, "index", "--db flag required", EmptyMeta())
-		return 2
+	dbPath, err := ResolveDBPath(*dbPathFlag, repoRoot)
+	if err != nil {
+		WriteErrorEnvelope(w, "index", "resolve db path: "+err.Error(), EmptyMeta())
+		return 1
 	}
-	db, err := store.Open(*dbPath)
+	db, err := store.Open(dbPath)
 	if err != nil {
 		WriteErrorEnvelope(w, "index", "open db: "+err.Error(), EmptyMeta())
 		return 1

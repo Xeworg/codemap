@@ -91,21 +91,20 @@ func TestIndexCmdExitCode1RuntimeError(t *testing.T) {
 }
 
 func TestIndexCmdExitCode2ValidationError(t *testing.T) {
-	// RED: exit 2 on validation error (e.g. missing repo path)
+	// exit 2 on validation error (empty repoRoot, no --db flag)
 	buf := &bytes.Buffer{}
-	args := []string{"--db", "/tmp/test.db"}
-	code := RunIndex(context.Background(), buf, args, "") // empty repoPath = validation fail
+	code := RunIndex(context.Background(), buf, []string{}, "") // empty repoRoot = validation fail
 	if code != 2 {
-		t.Errorf("expected exit 2 on validation error, got %d", code)
+		t.Errorf("expected exit 2 for validation error, got %d", code)
 	}
 }
-
-func TestIndexCmdExitCode3DataStateError(t *testing.T) {
 	// RED: exit 3 on index/data-state error
 	// A corrupt DB that opens but fails on query is data-state failure → exit 3.
 	// We simulate this by providing a valid empty DB that will fail on snapshot write
 	// (e.g., via a directory that can't be written). Instead, test exit 1 for corrupt file.
 	// For now, test exit 1 for invalid DB file, which is a runtime error.
+func TestIndexCmdExitCode3DataStateError(t *testing.T) {
+	// exit 3 on index/data-state error (corrupt DB)
 	tmp := t.TempDir()
 	corruptPath := filepath.Join(tmp, "corrupt.db")
 	f, err := os.Create(corruptPath)
