@@ -64,16 +64,25 @@ func (d *Doctor) Run() *DoctorResult {
 		hasWarn = true
 	}
 
-	// 3) installed tool presence
-	toolCheck := d.checkInstalledTool()
-	result.Checks = append(result.Checks, toolCheck)
-	if toolCheck.Level == "fail" {
+	// 3) installed extension presence
+	extCheck := d.checkInstalledExtension()
+	result.Checks = append(result.Checks, extCheck)
+	if extCheck.Level == "fail" {
 		hasFail = true
-	} else if toolCheck.Level == "warn" {
+	} else if extCheck.Level == "warn" {
 		hasWarn = true
 	}
 
-	// 4) effective DB path
+	// 4) legacy installed tool warning (pre-v0.35 path)
+	legacyCheck := d.checkLegacyInstalledTool()
+	result.Checks = append(result.Checks, legacyCheck)
+	if legacyCheck.Level == "fail" {
+		hasFail = true
+	} else if legacyCheck.Level == "warn" {
+		hasWarn = true
+	}
+
+	// 5) effective DB path
 	dbPath := d.effectiveDBPath()
 	result.DBPath = dbPath
 	_, dbErr := os.Stat(dbPath)
@@ -160,15 +169,31 @@ func (d *Doctor) checkInstalledSkill() DoctorCheck {
 	}
 }
 
-func (d *Doctor) checkInstalledTool() DoctorCheck {
-	toolDst := filepath.Join(d.Installer.ToolTargetDir, "codemap-tool.json")
-	if fileExists(toolDst) {
-		return DoctorCheck{Check: "installed_tool", Level: "pass", Message: "tool installed at: " + toolDst}
+func (d *Doctor) checkInstalledExtension() DoctorCheck {
+	extDst := filepath.Join(d.Installer.ExtensionTargetDir, "codemap-extension.ts")
+	if fileExists(extDst) {
+		return DoctorCheck{Check: "installed_extension", Level: "pass", Message: "extension installed at: " + extDst}
 	}
 	return DoctorCheck{
-		Check:   "installed_tool",
+		Check:   "installed_extension",
 		Level:   "warn",
-		Message: fmt.Sprintf("tool not installed at %s (run 'codemap install' to install)", toolDst),
+		Message: fmt.Sprintf("extension not installed at %s (run 'codemap install' to install)", extDst),
+	}
+}
+
+func (d *Doctor) checkLegacyInstalledTool() DoctorCheck {
+	legacyPath := filepath.Join(d.Installer.PiRuntimeBase, "tools", "codemap-tool.json")
+	if fileExists(legacyPath) {
+		return DoctorCheck{
+			Check:   "legacy_installed_tool",
+			Level:   "warn",
+			Message: fmt.Sprintf("legacy tool still present at %s (safe to remove; extensions path is used now)", legacyPath),
+		}
+	}
+	return DoctorCheck{
+		Check:   "legacy_installed_tool",
+		Level:   "pass",
+		Message: "no legacy tool artifact found in ~/.pi/agent/tools",
 	}
 }
 

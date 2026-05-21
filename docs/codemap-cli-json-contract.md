@@ -214,9 +214,9 @@ On repeated `index` calls:
         "info": "/path/to/repo/integrations/pi/skills/codemap-usage/SKILL.md"
       },
       {
-        "name": "template_tool",
+        "name": "template_extension",
         "passed": true,
-        "info": "/path/to/repo/integrations/pi/tools/codemap-tool.json"
+        "info": "/path/to/repo/integrations/pi/extensions/codemap-extension.ts"
       },
       {
         "name": "pi_runtime",
@@ -282,9 +282,9 @@ Exit codes for `install`: `0` for applied/up-to-date/dry-run; `1` for error; `2`
         "message": "skill not installed at ~/.pi/agent/skills/codemap-usage/SKILL.md (run 'codemap install' to install)"
       },
       {
-        "check": "installed_tool",
+        "check": "installed_extension",
         "level": "warn",
-        "message": "tool not installed at ~/.pi/agent/tools/codemap-tool.json (run 'codemap install' to install)"
+        "message": "extension not installed at ~/.pi/agent/extensions/codemap-extension.ts (run 'codemap install' to install)"
       },
       {
         "check": "default_db",

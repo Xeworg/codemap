@@ -21,7 +21,7 @@ func TestDoctorResultPass(t *testing.T) {
 			RepoRoot:       ".",
 			PiRuntimeBase:  filepath.Join(osHint(), ".pi", "agent"),
 			SkillTargetDir: filepath.Join(osHint(), ".pi", "agent", "skills"),
-			ToolTargetDir:  filepath.Join(osHint(), ".pi", "agent", "tools"),
+			ExtensionTargetDir: filepath.Join(osHint(), ".pi", "agent", "extensions"),
 		},
 	}
 	result := doc.Run()
