@@ -24,7 +24,7 @@ Every response is a JSON object with these top-level fields:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `schema_version` | string | Yes | Always `"1.0"` for MVP. |
-| `command` | string | Yes | One of: `index`, `symbol`, `history`. |
+| `command` | string | Yes | One of: `index`, `symbol`, `history`, `install`, `doctor`. |
 | `ok` | bool | Yes | `true` if the command succeeded; `false` if errors occurred. |
 | `data` | object | Yes | Command-specific payload (see below). |
 | `errors` | `null` or `string[]` | Yes | `null` on success; array of error strings on failure. |
@@ -193,6 +193,124 @@ On repeated `index` calls:
 
 ## Non-Goals
 
+### `codemap install`
+
+```json
+{
+  "schema_version": "1.0",
+  "command": "install",
+  "ok": true,
+  "data": {
+    "status": "applied",
+    "checks": [
+      {
+        "name": "repo_root",
+        "passed": true,
+        "info": "/path/to/repo"
+      },
+      {
+        "name": "template_skill",
+        "passed": true,
+        "info": "/path/to/repo/integrations/pi/skills/codemap-usage/SKILL.md"
+      },
+      {
+        "name": "template_tool",
+        "passed": true,
+        "info": "/path/to/repo/integrations/pi/tools/codemap-tool.json"
+      },
+      {
+        "name": "pi_runtime",
+        "passed": true,
+        "exists": true,
+        "info": "~/.pi/agent"
+      }
+    ],
+    "actions": [
+      {
+        "kind": "copy",
+        "source": "/path/to/repo/integrations/pi/skills/codemap-usage/SKILL.md",
+        "target": "~/.pi/agent/skills/codemap-usage/SKILL.md",
+        "changed": false
+      }
+    ],
+    "timestamp": "2026-05-21T10:00:00Z"
+  },
+  "errors": null,
+  "meta": {}
+}
+```
+
+- `status`: one of `applied` (changes applied), `up-to-date` (nothing changed), `dry-run` (planned, not applied), `error` (pre-flight or apply failed).
+- `checks`: pre-flight validation results. `exists` is present for runtime checks; `skipped` surfaces reasons when a check was not run.
+- `actions`: copy operations planned or executed. `changed: true` means the file was (or would be) written.
+
+Exit codes for `install`: `0` for applied/up-to-date/dry-run; `1` for error; `2` for flag/validation error.
+
+### `codemap doctor`
+
+```json
+{
+  "schema_version": "1.0",
+  "command": "doctor",
+  "ok": true,
+  "data": {
+    "status": "pass",
+    "checks": [
+      {
+        "check": "repo_root",
+        "level": "pass",
+        "message": "repo root: /path/to/repo"
+      },
+      {
+        "check": "integrations_dir",
+        "level": "pass",
+        "message": "integrations dir: /path/to/repo/integrations/pi"
+      },
+      {
+        "check": "skill",
+        "level": "warn",
+        "message": "skill template: /path/to/repo/integrations/pi/skills/codemap-usage/SKILL.md — NOT FOUND"
+      },
+      {
+        "check": "pi_runtime",
+        "level": "warn",
+        "message": "Pi runtime not found at ~/.pi/agent (will be created on install)"
+      },
+      {
+        "check": "installed_skill",
+        "level": "warn",
+        "message": "skill not installed at ~/.pi/agent/skills/codemap-usage/SKILL.md (run 'codemap install' to install)"
+      },
+      {
+        "check": "installed_tool",
+        "level": "warn",
+        "message": "tool not installed at ~/.pi/agent/tools/codemap-tool.json (run 'codemap install' to install)"
+      },
+      {
+        "check": "default_db",
+        "level": "warn",
+        "message": "DB path: ~/.cache/codemap/<hash>.db (not created yet; run 'codemap index' to create)"
+      }
+    ],
+    "db_path": "~/.cache/codemap/<hash>.db",
+    "db_exists": false
+  },
+  "errors": null,
+  "meta": {}
+}
+```
+
+- `status`: `pass` (all checks pass), `warn` (one or more warnings, no failures), `fail` (one or more failures).
+- `checks[].level`: `pass`, `warn`, or `fail`.
+- `db_path`: the effective default DB path (`CODEMAP_DB_PATH` env → `~/.cache/codemap/<hash>.db`).
+- `db_exists`: `true` if the DB file already exists; `false` otherwise.
+
+Exit codes for `doctor`: `0` for pass/warn; `1` for fail or runtime error.
+
+---
+
+## Non-Goals
+
 - This contract covers Go-only indexing.
 - TUI/Explorer UI is out of scope.
 - Multi-language parsing is out of scope for MVP.
@@ -214,6 +332,14 @@ codemap symbol --db myrepo.db MyFunction
 
 # Query symbol history
 codemap history --db myrepo.db MyFunction
+
+# Install codemap skill and tool into Pi runtime
+codemap install
+codemap install --dry-run
+
+# Diagnose codemap environment
+codemap doctor
+codemap doctor --json
 ```
 
 Global flags:

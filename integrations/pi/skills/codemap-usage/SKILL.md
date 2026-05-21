@@ -41,6 +41,20 @@ codemap symbol <target>
 codemap history <target>
 ```
 
+### Installing codemap into Pi runtime
+
+```bash
+codemap install          # apply install
+codemap install --dry-run  # preview planned actions without applying
+```
+
+### Diagnosing codemap environment
+
+```bash
+codemap doctor           # human-readable health report
+codemap doctor --json    # machine-readable diagnostic output
+```
+
 ## DB behavior (default)
 
 - Default DB path: `~/.cache/codemap/<repo-hash>.db`
@@ -75,16 +89,11 @@ All commands return deterministic JSON with this envelope:
 ```json
 {
   "schema_version": "1.0",
-  "command": "index|symbol|history",
+  "command": "index|symbol|history|install|doctor",
   "ok": true,
   "data": { ... },
   "errors": [],
-  "meta": {
-    "snapshot_id": 1,
-    "head_ref": "refs/heads/main",
-    "indexed_at": "2026-05-21T10:00:00Z",
-    "is_stale": false
-  }
+  "meta": { ... }
 }
 ```
 
