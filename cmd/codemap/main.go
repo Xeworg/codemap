@@ -84,10 +84,14 @@ func runInstall(ctx context.Context, stdout io.Writer, subargs []string) int {
 		return 2
 	}
 
-	repoRoot, err := detectRepoRoot()
-	if err != nil {
-		fmt.Fprintf(stdout, "Error: %v\n", err)
-		return 1
+	// Respect -repo if set; otherwise auto-detect git root.
+	repoRoot := repoFlag
+	if repoRoot == "." {
+		// Only auto-detect if cwd is not the default; prefer explicit over heuristic.
+		detected, err := detectRepoRoot()
+		if err == nil && detected != "" && detected != "." {
+			repoRoot = detected
+		}
 	}
 
 	inst := installer.DefaultInstaller(repoRoot)

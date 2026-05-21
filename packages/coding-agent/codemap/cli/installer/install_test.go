@@ -168,6 +168,36 @@ func TestDryRunNoChanges(t *testing.T) {
 	}
 }
 
+func TestExplicitRepoPath(t *testing.T) {
+	tmp := t.TempDir()
+	home := t.TempDir()
+	piBase := filepath.Join(home, ".pi", "agent")
+	os.MkdirAll(piBase, 0755)
+
+	// Create a "foreign" repo at /nonexistent but use explicit repoRoot
+	integrations := filepath.Join(tmp, "integrations", "pi", "skills", "codemap-usage")
+	toolDir := filepath.Join(tmp, "integrations", "pi", "tools")
+	os.MkdirAll(integrations, 0755)
+	os.MkdirAll(toolDir, 0755)
+	os.WriteFile(filepath.Join(integrations, "SKILL.md"), []byte("skill explicit"), 0644)
+	os.WriteFile(filepath.Join(toolDir, "codemap-tool.json"), []byte("tool explicit"), 0644)
+
+	i := &Installer{
+		RepoRoot:       tmp, // explicit path, not "."
+		PiRuntimeBase:  piBase,
+		SkillTargetDir: filepath.Join(piBase, "skills"),
+		ToolTargetDir:  filepath.Join(piBase, "tools"),
+	}
+	result := i.Run()
+	if result.Status != "applied" {
+		t.Fatalf("expected applied with explicit repoRoot, got %s: %s", result.Status, result.Error)
+	}
+	skillDst := filepath.Join(piBase, "skills", "codemap-usage", "SKILL.md")
+	if data, _ := os.ReadFile(skillDst); string(data) != "skill explicit" {
+		t.Errorf("expected 'skill explicit', got %q", string(data))
+	}
+}
+
 func TestApplyIdempotent(t *testing.T) {
 	tmp := t.TempDir()
 	home := t.TempDir()
@@ -311,5 +341,30 @@ func TestInstallResultJSON(t *testing.T) {
 	out := r.JSON()
 	if !strings.Contains(out, `"status"`) {
 		t.Errorf("JSON should contain status key, got: %s", out)
+	}
+}
+
+func TestNeedsCopySourceUnreadable(t *testing.T) {
+	// dst does not exist → true, no skip
+	changed, skip := needsCopy("/nonexistent/src", "/tmp/dst")
+	if !changed {
+		t.Errorf("expected changed=true when dst missing, got false")
+	}
+	if skip != "" {
+		t.Errorf("expected no skip reason, got: %s", skip)
+	}
+}
+
+func TestNeedsCopySourceReadError(t *testing.T) {
+	tmp := t.TempDir()
+	dst := filepath.Join(tmp, "existing_dst")
+	os.WriteFile(dst, []byte("content"), 0644)
+
+	changed, skip := needsCopy("/nonexistent/source", dst)
+	if changed {
+		t.Errorf("expected changed=false when source unreadable, got true")
+	}
+	if skip == "" {
+		t.Errorf("expected skip reason when source unreadable, got empty")
 	}
 }

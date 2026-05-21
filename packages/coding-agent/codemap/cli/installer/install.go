@@ -48,6 +48,7 @@ type ActionResult struct {
 	Source  string `json:"source"`
 	Target  string `json:"target"`
 	Changed bool   `json:"changed"`
+	Skipped string `json:"skipped,omitempty"` // reason skipped, if not copied
 }
 
 // Installer sets up codemap integration into Pi runtime.
@@ -210,15 +211,18 @@ func (i *Installer) runChecks() []CheckResult {
 }
 
 // planActions computes what would change.
+// If a source file cannot be read, the action is marked as skipped with a reason
+// so the error surfaces clearly in output instead of being silently dropped.
 func (i *Installer) planActions() []ActionResult {
 	var actions []ActionResult
 	for _, t := range i.Templates() {
-		changed := needsCopy(t.Source, t.Destination)
+		changed, skipReason := needsCopy(t.Source, t.Destination)
 		actions = append(actions, ActionResult{
 			Kind:    "copy",
 			Source:  t.Source,
 			Target:  t.Destination,
 			Changed: changed,
+			Skipped: skipReason,
 		})
 	}
 	return actions
@@ -266,7 +270,11 @@ func (r *InstallResult) Print() string {
 		if a.Changed {
 			icon = "→"
 		}
-		lines = append(lines, fmt.Sprintf("  %s %s -> %s", icon, a.Source, a.Target))
+		line := fmt.Sprintf("  %s %s -> %s", icon, a.Source, a.Target)
+		if a.Skipped != "" {
+			line += "  ⚠ " + a.Skipped
+		}
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -289,20 +297,20 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-func needsCopy(src, dst string) bool {
+func needsCopy(src, dst string) (bool, string) {
 	if !fileExists(dst) {
-		return true
+		return true, ""
 	}
 	srcData, err := os.ReadFile(src)
 	if err != nil {
-		// Real I/O error on source — treat as unknown, skip copy to avoid silent data loss.
-		return false
+		// Source unreadable: surface error so install output is explicit.
+		return false, "source unreadable: " + err.Error()
 	}
 	dstData, err := os.ReadFile(dst)
 	if err != nil {
-		return true
+		return true, ""
 	}
-	return string(srcData) != string(dstData)
+	return string(srcData) != string(dstData), ""
 }
 
 func copyFile(src, dst string) error {
