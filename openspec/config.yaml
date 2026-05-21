@@ -1,0 +1,52 @@
+version: 1
+project:
+  name: codrut
+  description: >-
+    CodeMap local utility (Go + SQLite) to index repositories and expose symbol,
+    relation, history, and intent context for humans and AI CLIs.
+sdd:
+  execution_mode: interactive
+  artifact_store:
+    - openspec
+    - engram
+  strict_tdd: true
+  chained_pr_strategy: auto-forecast
+  review_budget_lines: 400
+  phase_rules:
+    require_spec_before_implementation: true
+    require_design_for_non_trivial_changes: true
+    require_tasks_before_apply: true
+    require_verify_before_merge: true
+  workflow:
+    phases:
+      - proposal
+      - spec
+      - design
+      - tasks
+      - apply
+      - verify
+testing:
+  strategy: strict_tdd
+  runner:
+    type: go-test
+    command: go test ./...
+    status: pending_bootstrap
+    notes:
+      - No Go module or test harness detected yet in repository root.
+      - Update runner details after scaffolding core Go project structure.
+conventions:
+  language_targets:
+    - go
+    - typescript
+    - javascript
+    - python
+    - java
+    - csharp
+    - rust
+  cli_contract:
+    json_schema_version: "1.0"
+    require_evidence: true
+  codemap_mode_default: required
+artifacts:
+  openspec_root: openspec
+  memory_topic_prefix: sdd/codemap-v0
