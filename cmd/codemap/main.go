@@ -61,7 +61,7 @@ func main() {
 		exitCode = runWithHelp(ctx, stdout, stderr, "history", subargs, repoRoot,
 			func() int { return cli.RunHistory(ctx, stdout, subargs, repoRoot) })
 	case "install":
-		exitCode = runInstall(ctx, stdout, subargs)
+		exitCode = runInstall(ctx, stdout, stderr, subargs)
 	default:
 		helpRoot(stderr)
 		fmt.Fprintf(stderr, "\nError: unknown command %q.\n\n", cmd)
@@ -71,32 +71,26 @@ func main() {
 	os.Exit(exitCode)
 }
 
-// runInstall handles the install command (non-interactive core).
-func runInstall(ctx context.Context, stdout io.Writer, subargs []string) int {
+// runInstall handles the install command (non-interactive + TUI modes).
+func runInstall(ctx context.Context, stdout io.Writer, stderr io.Writer, subargs []string) int {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.SetOutput(stdout)
 	fs.Usage = func() { helpFor("install", stdout) }
-	dryRun := fs.Bool("dry-run", false, "Check and report planned actions without applying")
+	dryRun := fs.Bool("dry-run", false, "Check and report actions without applying")
 	jsonOutput := fs.Bool("json", false, "Output machine-readable JSON")
-	yes := fs.Bool("yes", false, "Skip prompts and apply immediately")
-	_ = yes // reserved; no interactive prompts in core yet
+	tuiMode := fs.Bool("tui", false, "Run interactive TUI installer")
 	if err := fs.Parse(subargs); err != nil {
 		return 2
 	}
 
-	// Respect -repo if set; otherwise auto-detect git root.
-	repoRoot := repoFlag
-	if repoRoot == "." {
-		// Only auto-detect if cwd is not the default; prefer explicit over heuristic.
-		detected, err := detectRepoRoot()
-		if err == nil && detected != "" && detected != "." {
-			repoRoot = detected
-		}
-	}
-
+	repoRoot := resolveRepoRoot()
 	inst := installer.DefaultInstaller(repoRoot)
 	inst.DryRun = *dryRun
 	inst.JSONOutput = *jsonOutput
+
+	if *tuiMode {
+		return installer.RunTUI(inst)
+	}
 
 	result := inst.Run()
 
@@ -133,6 +127,17 @@ func detectRepoRoot() (string, error) {
 		}
 		cur = parent
 	}
+}
+
+func resolveRepoRoot() string {
+	repoRoot := repoFlag
+	if repoRoot == "." {
+		detected, err := detectRepoRoot()
+		if err == nil && detected != "" && detected != "." {
+			repoRoot = detected
+		}
+	}
+	return repoRoot
 }
 
 func runWithHelp(ctx context.Context, stdout, stderr io.Writer, cmd string, subargs []string, repoRoot string, run func() int) int {
@@ -192,8 +197,9 @@ func helpFor(cmd string, w io.Writer) {
 		fmt.Fprintf(w, "Flags:\n")
 		fmt.Fprintf(w, "  --dry-run     Check and report actions without applying\n")
 		fmt.Fprintf(w, "  --json        Output machine-readable JSON\n")
-		fmt.Fprintf(w, "  --yes         Apply without prompts\n")
-		fmt.Fprintf(w, "\nExample:\n  codemap install          # apply\n  codemap install --dry-run # preview\n  codemap install --json     # JSON output\n")
+		fmt.Fprintf(w, "  --tui         Run interactive TUI installer\n")
+		fmt.Fprintf(w, "  --yes         Apply without prompts (only with --tui)\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap install          # apply\n  codemap install --dry-run # preview\n  codemap install --tui     # TUI installer\n")
 	default:
 		fmt.Fprintf(w, "No help available for %q.\n", cmd)
 	}
