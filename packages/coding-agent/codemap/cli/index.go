@@ -2,12 +2,16 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"flag"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"codrut/packages/coding-agent/codemap/indexer"
 	"codrut/packages/coding-agent/codemap/store"
@@ -107,7 +111,9 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 		return 1
 	}
 
-	// Persist files and their symbols.
+	indexedAt := time.Now().UTC().Format(time.RFC3339)
+
+	// Persist files, symbols, and history links.
 	for _, e := range result.Entries {
 		fileID, err := store.UpsertFile(ctx, tx, repoRoot, e.Path, "go", e.Hash, snapshotID)
 		if err != nil {
@@ -115,10 +121,22 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 			return 1
 		}
 		if e.Symbols != nil && len(e.Symbols) > 0 {
-			_, err = store.ReplaceFileSymbols(ctx, tx, fileID, e.Symbols)
+			symbolIDs, err := store.ReplaceFileSymbols(ctx, tx, fileID, e.Symbols)
 			if err != nil {
 				WriteErrorEnvelope(w, "index", "replace symbols: "+err.Error(), EmptyMeta())
 				return 1
+			}
+			commitHash := syntheticCommitHash(snapshotID, e.Path)
+			changeType := classifyChangeType(e.Path, prevFiles)
+			if err := store.EnsureCommit(ctx, tx, commitHash, "codemap-indexer", indexedAt, "index symbols for "+e.Path); err != nil {
+				WriteErrorEnvelope(w, "index", "ensure commit: "+err.Error(), EmptyMeta())
+				return 1
+			}
+			for _, symbolID := range symbolIDs {
+				if err := store.UpsertSymbolCommit(ctx, tx, symbolID, commitHash, "strong", changeType); err != nil {
+					WriteErrorEnvelope(w, "index", "upsert symbol history: "+err.Error(), EmptyMeta())
+					return 1
+				}
 			}
 		}
 	}
@@ -154,6 +172,18 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 }
 
 // getHeadRef reads the current git HEAD ref for the repo root.
+func syntheticCommitHash(snapshotID int64, path string) string {
+	sum := sha256.Sum256([]byte(path + ":" + strconv.FormatInt(snapshotID, 10)))
+	return hex.EncodeToString(sum[:])
+}
+
+func classifyChangeType(path string, prevFiles map[string]string) string {
+	if _, ok := prevFiles[path]; ok {
+		return "modify"
+	}
+	return "add"
+}
+
 func getHeadRef(repoRoot string) string {
 	headFile := filepath.Join(repoRoot, ".git", "HEAD")
 	data, err := os.ReadFile(headFile)

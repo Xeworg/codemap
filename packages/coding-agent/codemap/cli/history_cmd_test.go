@@ -165,6 +165,20 @@ func TestHistoryCmdReturnsHistoryEntries(t *testing.T) {
 	}
 }
 
+func TestHistoryCmdIncludesCommitLinksAfterIndex(t *testing.T) {
+	tmp := t.TempDir()
+	db := filepath.Join(tmp, "test.db")
+	populateDB(t, db)
+
+	out, code := runHistoryCmdJSON(t, db, "Valid")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d\noutput: %s", code, out)
+	}
+	if !bytes.Contains(out, []byte(`"type":"commit_link"`)) {
+		t.Fatalf("expected commit_link evidence after indexing, got:\n%s", out)
+	}
+}
+
 func TestHistoryCmdLinkStrengthEnum(t *testing.T) {
 	// RED: link_strength values in history must be strong|medium|weak
 	// This test is a structural test: we just verify the field exists
