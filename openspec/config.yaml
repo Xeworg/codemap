@@ -30,10 +30,10 @@ testing:
   runner:
     type: go-test
     command: go test ./...
-    status: pending_bootstrap
+    status: active
     notes:
-      - No Go module or test harness detected yet in repository root.
-      - Update runner details after scaffolding core Go project structure.
+      - Go module and test harness are active in repository root.
+      - Keep this runner as canonical verification command.
 conventions:
   language_targets:
     - go

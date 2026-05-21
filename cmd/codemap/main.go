@@ -232,7 +232,6 @@ func helpFor(cmd string, w io.Writer) {
 		fmt.Fprintf(w, "  --dry-run     Check and report actions without applying\n")
 		fmt.Fprintf(w, "  --json        Output machine-readable JSON\n")
 		fmt.Fprintf(w, "  --tui         Run interactive TUI installer\n")
-		fmt.Fprintf(w, "  --yes         Apply without prompts (only with --tui)\n")
 		fmt.Fprintf(w, "\nExample:\n  codemap install          # apply\n  codemap install --dry-run # preview\n  codemap install --tui     # TUI installer\n")
 	case "doctor":
 		fmt.Fprintf(w, "Usage: codemap doctor [flags]\n\n")
