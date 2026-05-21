@@ -67,18 +67,15 @@ func main() {
 	os.Exit(exitCode)
 }
 
-// runWithHelp registers per-command --help flag before dispatching.
+// runWithHelp handles per-command help flags without pre-parsing command args.
 func runWithHelp(ctx context.Context, stdout, stderr io.Writer, cmd string, subargs []string, repoRoot string, run func() int) int {
-	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	fs.Usage = func() { helpFor(cmd, stderr) }
-	if err := fs.Parse(subargs); err != nil {
-		return 2
-	}
-	if fs.Lookup("help") != nil && fs.Parsed() {
-		// -h/--help was passed; show help and exit cleanly.
-		helpFor(cmd, stderr)
-		os.Exit(0)
+	_ = ctx
+	_ = repoRoot
+	for _, a := range subargs {
+		if a == "-h" || a == "--help" || a == "help" {
+			helpFor(cmd, stderr)
+			return 0
+		}
 	}
 	return run()
 }
