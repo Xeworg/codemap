@@ -1,0 +1,1 @@
+Design completed for codemap-impact-edges-v1 with phased architecture, deterministic extraction ordering, fail-soft unresolved handling, and bounded test plan.
