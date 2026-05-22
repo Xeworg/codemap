@@ -199,6 +199,13 @@ func ConfidenceForSymbol(kind string) string {
 
 // --- Enum validation helpers ---
 
+const (
+	EvidenceNoInboundEdges   = "no_inbound_edges"
+	EvidenceInboundEdges     = "inbound_edges"
+	EvidenceImplicitRuntime  = "implicit_runtime_entry"
+	EvidencePublicAPISurface = "public_api_surface"
+)
+
 // ValidRiskTierValues lists all allowed risk_tier values.
 var ValidRiskTierValues = []string{"high", "medium", "low"}
 
@@ -226,7 +233,7 @@ func IsValidDeadcodeClassification(class string) bool {
 }
 
 // ValidDeadcodeSuggestionValues lists all allowed suggestion values.
-var ValidDeadcodeSuggestionValues = []string{"remove", "deprecate", "justify"}
+var ValidDeadcodeSuggestionValues = []string{"remove", "deprecate", "justify", "review"}
 
 // IsValidDeadcodeSuggestion reports whether sug is a valid deadcode suggestion.
 func IsValidDeadcodeSuggestion(sug string) bool {

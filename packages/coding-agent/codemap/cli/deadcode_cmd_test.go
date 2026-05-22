@@ -375,3 +375,95 @@ func TestDeadcode_ExitCode3WhenNoIndex(t *testing.T) {
 		t.Errorf("expected exit 3 for no-index state, got %d", code)
 	}
 }
+
+func TestClassify_WithInboundEdges_ClassifiesUncertain(t *testing.T) {
+	class, _, _ := classifyDeadcode(1, "func", "Private", "pkg/file.go")
+	if class != "uncertain" {
+		t.Fatalf("expected uncertain, got %q", class)
+	}
+}
+
+func TestClassify_MainFunc_NoEdges_ClassifiesUncertain(t *testing.T) {
+	class, _, _ := classifyDeadcode(0, "func", "main", "cmd/app/main.go")
+	if class != "uncertain" {
+		t.Fatalf("expected uncertain, got %q", class)
+	}
+	evidence := deadcodeEvidence(0, "main", "cmd/app/main.go")
+	if !hasEvidenceType(evidence, EvidenceImplicitRuntime) {
+		t.Fatalf("expected evidence %q", EvidenceImplicitRuntime)
+	}
+}
+
+func TestClassify_InitFunc_NoEdges_ClassifiesUncertain(t *testing.T) {
+	class, _, _ := classifyDeadcode(0, "func", "init", "pkg/init.go")
+	if class != "uncertain" {
+		t.Fatalf("expected uncertain, got %q", class)
+	}
+}
+
+func TestClassify_ExportedNoEdges_Uncertain(t *testing.T) {
+	class, _, _ := classifyDeadcode(0, "func", "Exported", "pkg/file.go")
+	if class != "uncertain" {
+		t.Fatalf("expected uncertain, got %q", class)
+	}
+	evidence := deadcodeEvidence(0, "Exported", "pkg/file.go")
+	if !hasEvidenceType(evidence, EvidencePublicAPISurface) {
+		t.Fatalf("expected evidence %q", EvidencePublicAPISurface)
+	}
+}
+
+func TestClassify_PrivateFuncNoEdges_Unused(t *testing.T) {
+	class, _, _ := classifyDeadcode(0, "func", "private", "pkg/file.go")
+	if class != "unused" {
+		t.Fatalf("expected unused, got %q", class)
+	}
+}
+
+func TestClassify_MethodNoEdges_NotHighConfidenceUnused(t *testing.T) {
+	class, _, confidence := classifyDeadcode(0, "method", "method", "pkg/file.go")
+	if class == "unused" && confidence == "high" {
+		t.Fatalf("method should not be high-confidence unused")
+	}
+}
+
+func TestEvidence_Composable(t *testing.T) {
+	evidence := deadcodeEvidence(0, "main", "cmd/app/main.go")
+	if !hasEvidenceType(evidence, EvidenceNoInboundEdges) {
+		t.Fatalf("expected evidence %q", EvidenceNoInboundEdges)
+	}
+	if !hasEvidenceType(evidence, EvidenceImplicitRuntime) {
+		t.Fatalf("expected evidence %q", EvidenceImplicitRuntime)
+	}
+	if hasEvidenceType(evidence, EvidencePublicAPISurface) {
+		t.Fatalf("main should not have public_api_surface (lowercase start)")
+	}
+}
+
+func TestEvidence_PublicAPIComposes(t *testing.T) {
+	evidence := deadcodeEvidence(0, "Exported", "pkg/file.go")
+	if !hasEvidenceType(evidence, EvidenceNoInboundEdges) {
+		t.Fatalf("expected evidence %q", EvidenceNoInboundEdges)
+	}
+	if !hasEvidenceType(evidence, EvidencePublicAPISurface) {
+		t.Fatalf("expected evidence %q", EvidencePublicAPISurface)
+	}
+	if hasEvidenceType(evidence, EvidenceImplicitRuntime) {
+		t.Fatalf("Exported should not have implicit_runtime_entry")
+	}
+}
+
+func TestEvidence_InboundComposes(t *testing.T) {
+	evidence := deadcodeEvidence(1, "Used", "pkg/file.go")
+	if !hasEvidenceType(evidence, EvidenceInboundEdges) {
+		t.Fatalf("expected evidence %q", EvidenceInboundEdges)
+	}
+}
+
+func hasEvidenceType(evidence []EvidenceEntry, typ string) bool {
+	for _, e := range evidence {
+		if e.Type == typ {
+			return true
+		}
+	}
+	return false
+}

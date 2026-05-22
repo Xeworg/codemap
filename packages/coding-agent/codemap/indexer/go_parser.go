@@ -18,9 +18,7 @@ func ExtractGoSymbols(f *ast.File, fset *token.FileSet) []Symbol {
 		decl := decl
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			if d.Recv == nil { // top-level only
-				out = append(out, symbolFromFuncDecl(d, fset))
-			}
+			out = append(out, symbolFromFuncDecl(d, fset))
 		case *ast.GenDecl:
 			kind := "var"
 			if d.Tok == token.CONST {
@@ -37,6 +35,7 @@ func ExtractGoSymbols(f *ast.File, fset *token.FileSet) []Symbol {
 
 // ParseGoFile parses a Go source file and returns the extraction result.
 // It returns an error for unparseable source (syntax-level).
+// Both symbols and call edges are extracted.
 func ParseGoFile(fset *token.FileSet, filename string, src []byte) (ParseResult, error) {
 	if fset == nil {
 		return ParseResult{}, errors.New("nil FileSet")
@@ -46,19 +45,49 @@ func ParseGoFile(fset *token.FileSet, filename string, src []byte) (ParseResult,
 		return ParseResult{}, err
 	}
 	syms := ExtractGoSymbols(file, fset)
-	return ParseResult{Symbols: syms}, nil
+	ee := NewEdgeExtractor(file, fset)
+	edges := ee.ExtractEdges()
+	return ParseResult{Symbols: syms, Edges: edges}, nil
 }
 
 // symbolFromFuncDecl converts a FuncDecl to a Symbol.
 func symbolFromFuncDecl(d *ast.FuncDecl, fset *token.FileSet) Symbol {
 	sig := typeSignature(d)
+	kind := "func"
+	var recv string
+	if d.Recv != nil {
+		kind = "method"
+		recv = receiverName(d.Recv)
+	}
 	return Symbol{
 		Name:      d.Name.Name,
-		Kind:      "func",
+		Kind:      kind,
 		Signature: sig,
+		Recv:      recv,
 		StartLine: fset.Position(d.Pos()).Line,
 		EndLine:   fset.Position(d.End()).Line,
 	}
+}
+
+// receiverName extracts the receiver type name from an AST receiver list.
+// For a value receiver (T), it returns "T".
+// For a pointer receiver (*T), it returns "*T".
+// For a package-qualified receiver (pkg.T), it returns the last identifier.
+func receiverName(recv *ast.FieldList) string {
+	if recv == nil || len(recv.List) == 0 {
+		return ""
+	}
+	r := recv.List[0]
+	switch x := r.Type.(type) {
+	case *ast.Ident:
+		return x.Name
+	case *ast.StarExpr:
+		if ident, ok := x.X.(*ast.Ident); ok {
+			return "*" + ident.Name
+		}
+		return "*"
+	}
+	return ""
 }
 
 // symbolFromSpec converts a GenDecl spec to one or more Symbols.

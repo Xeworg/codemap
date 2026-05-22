@@ -14,7 +14,8 @@ import (
 const defaultDeadcodeLimit = 100
 
 // RunDeadcode runs the "deadcode" command and returns an exit code.
-// It analyzes symbols with zero inbound edges and classifies them as dead code.
+// It analyzes symbols and classifies them as dead code using inbound edge
+// counts and heuristic entrypoint/public-API detection.
 func RunDeadcode(ctx context.Context, w io.Writer, args []string, repoRoot string) int {
 	fs := flag.NewFlagSet("deadcode", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -50,38 +51,21 @@ func RunDeadcode(ctx context.Context, w io.Writer, args []string, repoRoot strin
 		return 3
 	}
 
-	// Get symbols with zero inbound edges.
-	symbols, err := store.GetSymbolsWithZeroInboundEdges(ctx, db.DB)
+	// Get all symbols with pre-computed inbound edge counts in one query.
+	symbols, err := store.GetAllSymbolsWithInboundCounts(ctx, db.DB)
 	if err != nil {
 		WriteErrorEnvelope(w, "deadcode", "query symbols: "+err.Error(), EmptyMeta())
 		return 1
 	}
 
-	// Filter out generated files and test fixtures.
-	var filtered []store.SymbolRow
+	// Filter out generated files, test fixtures, and symbols with inbound edges.
+	var findings []DeadcodeFinding
 	for _, sym := range symbols {
 		if isGeneratedOrTestFixture(sym.File) {
 			continue
 		}
-		filtered = append(filtered, sym)
-	}
-	symbols = filtered
-
-	// Build findings.
-	var findings []DeadcodeFinding
-	for _, sym := range symbols {
-		// Check edge count for classification.
-		edges, err := store.GetSymbolEdges(ctx, db.DB, sym.ID)
-		if err != nil {
-			continue
-		}
-		inboundCount := 0
-		for _, e := range edges {
-			if e.ToSymbolID == sym.ID {
-				inboundCount++
-			}
-		}
-		classification, suggestion, confidence := classifyDeadcode(inboundCount, sym.Kind)
+		classification, suggestion, confidence := classifyDeadcode(sym.InboundCount, sym.Kind, sym.Name, sym.File)
+		evidence := deadcodeEvidence(sym.InboundCount, sym.Name, sym.File)
 		finding := DeadcodeFinding{
 			SymbolName:     sym.Name,
 			File:           sym.File,
@@ -91,12 +75,7 @@ func RunDeadcode(ctx context.Context, w io.Writer, args []string, repoRoot strin
 			Classification: classification,
 			Suggestion:     suggestion,
 			Confidence:     confidence,
-			Evidence: []EvidenceEntry{
-				{
-					Type:        "no_inbound_edges",
-					Description: "symbol has no inbound references in the code graph",
-				},
-			},
+			Evidence:       evidence,
 		}
 		findings = append(findings, finding)
 	}
@@ -169,8 +148,75 @@ func isGeneratedOrTestFixture(filePath string) bool {
 	return false
 }
 
-// classifyDeadcode determines the classification, suggestion, and confidence
-// for a deadcode finding based on edge count and symbol kind.
+// isRuntimeEntrypoint returns true for main/init entrypoints.
+func isRuntimeEntrypoint(name, file string) bool {
+	if name == "main" || name == "init" {
+		return true
+	}
+	return false
+}
+
+// isPublicAPI returns true for exported symbols that may be used externally.
+// Heuristic: name starts with uppercase letter (v1 boundary).
+func isPublicAPI(name string) bool {
+	if name == "" {
+		return false
+	}
+	return name[0] >= 'A' && name[0] <= 'Z'
+}
+
+// isEntrypointFile returns true for files matching cmd/ entrypoint patterns.
+func isEntrypointFile(file string) bool {
+	lowercase := strings.ToLower(file)
+	return strings.Contains(lowercase, "/cmd/") ||
+		strings.Contains(lowercase, "/main.go") ||
+		strings.Contains(lowercase, "\\cmd\\")
+}
+
+// deadcodeEvidence builds a composable evidence slice for a symbol.
+func deadcodeEvidence(inbound int, name, file string) []EvidenceEntry {
+	var ev []EvidenceEntry
+	if inbound == 0 {
+		ev = append(ev, EvidenceEntry{Type: EvidenceNoInboundEdges, Description: "symbol has no inbound references in the code graph"})
+	} else {
+		ev = append(ev, EvidenceEntry{Type: EvidenceInboundEdges, Description: "symbol has inbound references"})
+	}
+	if isRuntimeEntrypoint(name, file) {
+		ev = append(ev, EvidenceEntry{Type: EvidenceImplicitRuntime, Description: "symbol is a runtime entrypoint (main or init)"})
+	}
+	if isPublicAPI(name) {
+		ev = append(ev, EvidenceEntry{Type: EvidencePublicAPISurface, Description: "symbol is part of the public API surface"})
+	}
+	return ev
+}
+
+// classifyDeadcode determines the classification, suggestion, confidence, and
+// evidence for a deadcode finding based on inbound count, symbol kind, name, and file.
+func classifyDeadcode(inbound int, kind, name, file string) (classification, suggestion, confidence string) {
+	if inbound > 0 {
+		return "uncertain", "review", "low"
+	}
+	// inbound == 0
+	if isRuntimeEntrypoint(name, file) {
+		return "uncertain", "review", "low"
+	}
+	if isPublicAPI(name) {
+		return "uncertain", "justify", "low"
+	}
+	// No heuristics apply: use kind-based confidence.
+	switch kind {
+	case "func", "type":
+		return "unused", "remove", "high"
+	case "var", "const":
+		return "unused", "remove", "medium"
+	case "method":
+		return "unused", "remove", "medium"
+	default:
+		return "unused", "remove", "low"
+	}
+}
+
+// sortDeadcodeFindings sorts findings deterministically.
 func sortDeadcodeFindings(findings []DeadcodeFinding) {
 	sort.SliceStable(findings, func(i, j int) bool {
 		ci := deadcodeClassificationRank(findings[i].Classification)
@@ -188,21 +234,4 @@ func sortDeadcodeFindings(findings []DeadcodeFinding) {
 		}
 		return findings[i].File < findings[j].File
 	})
-}
-
-func classifyDeadcode(inboundCount int, symbolKind string) (classification, suggestion, confidence string) {
-	if inboundCount == 0 {
-		// Zero inbound edges: could be truly unused.
-		// Higher confidence for well-known stable kinds.
-		switch symbolKind {
-		case "func", "type":
-			return "unused", "remove", "high"
-		case "var", "const":
-			return "unused", "remove", "medium"
-		default:
-			return "unused", "remove", "low"
-		}
-	}
-	// Some edges exist: fall through to uncertain.
-	return "uncertain", "justify", "low"
 }

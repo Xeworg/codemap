@@ -130,6 +130,14 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 				WriteErrorEnvelope(w, "index", "replace symbols: "+err.Error(), EmptyMeta())
 				return 1
 			}
+			// Build name→ID map for edge resolution.
+			nameToID := buildSymbolNameMap(ctx, tx, fileID, e.Symbols)
+			if len(e.Edges) > 0 {
+				resolved := resolveEdges(e.Edges, nameToID)
+				if err := store.UpsertEdges(ctx, tx, resolved); err != nil {
+					slog.Warn("upsert edges", "file", e.Path, "err", err)
+				}
+			}
 			if err := indexGitHistoryForFile(ctx, tx, gitClient, isGitRepo, e, symbolIDs, snapshotID, prevFiles, indexedAt); err != nil {
 				WriteErrorEnvelope(w, "index", "index git history: "+err.Error(), EmptyMeta())
 				return 1
@@ -302,4 +310,79 @@ func getFileHashesForSnapshot(ctx context.Context, db *sql.DB, snapshotID int64)
 		m[path] = hash
 	}
 	return m, rows.Err()
+}
+
+// buildSymbolNameMap creates a lookup from (Name, Recv) → symbolID for the
+// given file. This is used to resolve EdgeIntent symbols to concrete DB IDs.
+func buildSymbolNameMap(ctx context.Context, tx *sql.Tx, fileID int64, symbols []indexer.Symbol) map[string]int64 {
+	nameToID := make(map[string]int64)
+	// We need to query IDs from the just-inserted symbols.
+	// Since ReplaceFileSymbols clears and re-inserts, we can query by file_id.
+	rows, err := tx.QueryContext(ctx,
+		`SELECT id, name, kind FROM symbols WHERE file_id = ?`, fileID)
+	if err != nil {
+		return nameToID
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var name, kind string
+		if err := rows.Scan(&id, &name, &kind); err != nil {
+			continue
+		}
+		// Key by simple name for top-level funcs.
+		key := name
+		// For methods, also key by receiver + name.
+		if kind == "method" {
+			// We need the receiver from the original symbols list.
+			for _, s := range symbols {
+				if s.Name == name && s.Kind == "method" {
+					methodKey := s.Recv + "." + name
+					nameToID[methodKey] = id
+					break
+				}
+			}
+		}
+		nameToID[key] = id
+	}
+	return nameToID
+}
+
+// resolveEdges converts a slice of EdgeIntent (with Name/Recv keys) to
+// ResolvedEdge (with concrete symbol IDs) using the nameToID lookup.
+// Symbols whose IDs cannot be resolved are skipped.
+func resolveEdges(edges []indexer.EdgeIntent, nameToID map[string]int64) []store.ResolvedEdge {
+	var resolved []store.ResolvedEdge
+	for _, e := range edges {
+		fromID := resolveSymbolID(e.From, nameToID)
+		toID := resolveSymbolID(e.To, nameToID)
+		if fromID == 0 || toID == 0 {
+			continue
+		}
+		resolved = append(resolved, store.ResolvedEdge{
+			FromSymbolID: fromID,
+			ToSymbolID:   toID,
+			EdgeType:     e.Kind,
+		})
+	}
+	return resolved
+}
+
+// resolveSymbolID maps an EdgeIntent's SymbolKey to a concrete symbol ID.
+// It tries qualified key (Recv.Name) first, then bare Name.
+func resolveSymbolID(key indexer.SymbolKey, nameToID map[string]int64) int64 {
+	if key.Name == "" {
+		return 0
+	}
+	// Try qualified key for methods.
+	if key.Recv != "" {
+		if id, ok := nameToID[key.Recv+"."+key.Name]; ok {
+			return id
+		}
+	}
+	// Fall back to bare name.
+	if id, ok := nameToID[key.Name]; ok {
+		return id
+	}
+	return 0
 }

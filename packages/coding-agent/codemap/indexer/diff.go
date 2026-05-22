@@ -37,7 +37,8 @@ type DiffSet struct {
 type FileEntry struct {
 	Path    string
 	Hash    string
-	Symbols []Symbol // populated by processParse
+	Symbols []Symbol     // populated by processParse
+	Edges   []EdgeIntent // call/reference edges extracted from the file
 }
 
 // ClassifyFiles classifies a map of path->hash against known previous hashes.

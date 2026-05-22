@@ -17,6 +17,7 @@ type IndexResult struct {
 	FilesParsed  int
 	ParseErrors  int
 	SymbolsFound int
+	EdgesFound   int
 	Entries      []FileEntry // files processed (new/changed) with their symbols
 	Errored      bool
 }
@@ -85,8 +86,10 @@ func processParse(repoRoot string, entry *FileEntry, result *IndexResult) {
 		return
 	}
 	result.SymbolsFound += len(pr.Symbols)
+	result.EdgesFound += len(pr.Edges)
 	result.FilesParsed++
 	entry.Symbols = pr.Symbols
+	entry.Edges = pr.Edges
 }
 
 // FixturePath returns the path to a fixture directory under testdata.
