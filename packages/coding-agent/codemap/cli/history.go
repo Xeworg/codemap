@@ -43,7 +43,7 @@ func RunHistory(ctx context.Context, w io.Writer, args []string, repoRoot string
 	}
 	defer db.Close()
 
-	// Lookup symbol ID.
+	// Load meta.
 	meta, err := store.GetLatestSnapshotMeta(ctx, db.DB)
 	if err != nil {
 		WriteErrorEnvelope(w, "history", "read meta: "+err.Error(), EmptyMeta())
@@ -54,13 +54,31 @@ func RunHistory(ctx context.Context, w io.Writer, args []string, repoRoot string
 		return 3
 	}
 
+	stale := StaleNow(meta.IndexedAt)
+
+	// Lookup symbol ID.
 	sym, err := store.GetSymbolByName(ctx, db.DB, symbolArg)
 	if err != nil {
 		WriteErrorEnvelope(w, "history", "query: "+err.Error(), EmptyMeta())
 		return 1
 	}
 	if sym == nil {
-		WriteErrorEnvelope(w, "history", "symbol \""+symbolArg+"\" not found", EmptyMeta())
+		// Symbol not found: derive cause and return structured explain_not_found.
+		cause, actions := DeriveHistoryNotFoundCause(ctx, db.DB, symbolArg, false, false)
+		enf := ExplainNotFound{
+			Cause:              cause,
+			RecommendedActions: actions,
+		}
+		envelope := NewEnvelope("history", false, map[string]interface{}{
+			"explain_not_found": enf,
+		}, []string{"symbol \"" + symbolArg + "\" not found"}, Meta{
+			SnapshotID: meta.SnapshotID,
+			HeadRef:    meta.HeadRef,
+			IndexedAt:  meta.IndexedAt,
+			IsStale:    stale,
+		})
+		out, _ := envelope.Encode()
+		_, _ = w.Write(out)
 		return 3
 	}
 
@@ -85,11 +103,27 @@ func RunHistory(ctx context.Context, w io.Writer, args []string, repoRoot string
 		}
 	}
 	if len(evidence) == 0 {
-		evidence = []EvidenceEntry{{Type: "no_history", Description: "no commit history found for this symbol"}}
+		// Symbol exists but has no history links.
+		cause, actions := DeriveHistoryNotFoundCause(ctx, db.DB, symbolArg, true, false)
+		enf := ExplainNotFound{
+			Cause:              cause,
+			RecommendedActions: actions,
+		}
+		envelope := NewEnvelope("history", true, map[string]interface{}{
+			"symbol_name":       symbolArg,
+			"confidence":        "low",
+			"evidence":          []EvidenceEntry{{Type: "no_history", Description: "no commit history found for this symbol"}},
+			"explain_not_found": enf,
+		}, nil, Meta{
+			SnapshotID: meta.SnapshotID,
+			HeadRef:    meta.HeadRef,
+			IndexedAt:  meta.IndexedAt,
+			IsStale:    stale,
+		})
+		out, _ := envelope.Encode()
+		_, _ = w.Write(out)
+		return 0
 	}
-
-	metaOut, _ := store.GetLatestSnapshotMeta(ctx, db.DB)
-	stale := StaleNow(metaOut.IndexedAt)
 
 	data := HistoryData{
 		SymbolName: symbolArg,
@@ -98,9 +132,9 @@ func RunHistory(ctx context.Context, w io.Writer, args []string, repoRoot string
 	}
 
 	envelope := NewEnvelope("history", true, data, nil, Meta{
-		SnapshotID: metaOut.SnapshotID,
-		HeadRef:    metaOut.HeadRef,
-		IndexedAt:  metaOut.IndexedAt,
+		SnapshotID: meta.SnapshotID,
+		HeadRef:    meta.HeadRef,
+		IndexedAt:  meta.IndexedAt,
 		IsStale:    stale,
 	})
 

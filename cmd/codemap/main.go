@@ -69,6 +69,9 @@ func main() {
 	case "query":
 		exitCode = runWithHelp(ctx, stdout, stderr, "query", subargs, repoRoot,
 			func() int { return cli.RunQuery(ctx, stdout, subargs, repoRoot) })
+	case "deadcode":
+		exitCode = runWithHelp(ctx, stdout, stderr, "deadcode", subargs, repoRoot,
+			func() int { return cli.RunDeadcode(ctx, stdout, subargs, repoRoot) })
 	case "install":
 		exitCode = runInstall(ctx, stdout, stderr, subargs)
 	case "doctor":
@@ -207,6 +210,7 @@ func helpRoot(w io.Writer) {
 	fmt.Fprintf(w, "  codemap migrate     Run pending schema migrations\n")
 	fmt.Fprintf(w, "  codemap impact      Show symbols impacted by a given symbol\n")
 	fmt.Fprintf(w, "  codemap query       Look up symbols by name or prefix\n")
+	fmt.Fprintf(w, "  codemap deadcode    Report unused/likely-unused symbols with suggestions\n")
 	fmt.Fprintf(w, "  codemap install     Install codemap skill and tool into Pi runtime\n")
 	fmt.Fprintf(w, "  codemap doctor      Diagnose codemap environment and integration\n")
 	fmt.Fprintf(w, "\nUse 'codemap help <command>' for per-command usage.\n")
@@ -256,6 +260,13 @@ func helpFor(cmd string, w io.Writer) {
 		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
 		fmt.Fprintf(w, "  --json      Output JSON envelope (default, implicit)\n")
 		fmt.Fprintf(w, "\nExample:\n  codemap query MyFunction\n  codemap query --db myrepo.db Foo\n")
+	case "deadcode":
+		fmt.Fprintf(w, "Usage: codemap deadcode [flags]\n\n")
+		fmt.Fprintf(w, "Report symbols with no inbound references, classified as unused/likely-unused.\n\n")
+		fmt.Fprintf(w, "Flags:\n")
+		fmt.Fprintf(w, "  -db path    Path to SQLite database (optional; default: ~/.cache/codemap/<hash>.db)\n")
+		fmt.Fprintf(w, "  -limit n    Maximum findings to return (default: 100)\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap deadcode\n  codemap deadcode --db myrepo.db\n  codemap deadcode --limit 50\n")
 	case "install":
 		fmt.Fprintf(w, "Usage: codemap install [flags]\n\n")
 		fmt.Fprintf(w, "Install or update the codemap skill and tool into Pi runtime.\n\n")

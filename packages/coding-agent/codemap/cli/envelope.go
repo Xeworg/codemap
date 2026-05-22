@@ -69,9 +69,46 @@ type MigrateData struct {
 
 // ImpactData is the data payload for an impact query.
 type ImpactData struct {
-	TargetSymbol    string          `json:"target_symbol"`
-	AffectedSymbols []string        `json:"affected_symbols"`
-	Evidence        []EvidenceEntry `json:"evidence"`
+	TargetSymbol string          `json:"target_symbol"`
+	Findings     []ImpactFinding `json:"findings"`
+	Evidence     []EvidenceEntry `json:"evidence"`
+}
+
+// ImpactFinding represents a single finding in an impact report.
+type ImpactFinding struct {
+	SymbolName string          `json:"symbol_name"`
+	File       string          `json:"file"`
+	Kind       string          `json:"kind,omitempty"`
+	StartLine  int             `json:"start_line,omitempty"`
+	EndLine    int             `json:"end_line,omitempty"`
+	RiskTier   string          `json:"risk_tier"`
+	Confidence string          `json:"confidence"`
+	Evidence   []EvidenceEntry `json:"evidence"`
+}
+
+// DeadcodeData is the data payload for a deadcode report.
+type DeadcodeData struct {
+	Findings []DeadcodeFinding `json:"findings"`
+}
+
+// DeadcodeFinding represents a single dead code finding.
+type DeadcodeFinding struct {
+	SymbolName     string          `json:"symbol_name"`
+	File           string          `json:"file"`
+	Kind           string          `json:"kind,omitempty"`
+	StartLine      int             `json:"start_line,omitempty"`
+	EndLine        int             `json:"end_line,omitempty"`
+	Classification string          `json:"classification"`
+	Suggestion     string          `json:"suggestion"`
+	Confidence     string          `json:"confidence"`
+	Evidence       []EvidenceEntry `json:"evidence"`
+}
+
+// ExplainNotFound provides structured diagnostic info when a symbol or history
+// query cannot be resolved.
+type ExplainNotFound struct {
+	Cause              string   `json:"cause"`
+	RecommendedActions []string `json:"recommended_actions"`
 }
 
 // QueryData is the data payload for a query command.
@@ -157,5 +194,87 @@ func ConfidenceForSymbol(kind string) string {
 		return "medium"
 	default:
 		return "low"
+	}
+}
+
+// --- Enum validation helpers ---
+
+// ValidRiskTierValues lists all allowed risk_tier values.
+var ValidRiskTierValues = []string{"high", "medium", "low"}
+
+// IsValidRiskTier reports whether tier is a valid risk_tier value.
+func IsValidRiskTier(tier string) bool {
+	for _, v := range ValidRiskTierValues {
+		if tier == v {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidDeadcodeClassificationValues lists all allowed classification values.
+var ValidDeadcodeClassificationValues = []string{"unused", "likely-unused", "uncertain"}
+
+// IsValidDeadcodeClassification reports whether class is a valid deadcode classification.
+func IsValidDeadcodeClassification(class string) bool {
+	for _, v := range ValidDeadcodeClassificationValues {
+		if class == v {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidDeadcodeSuggestionValues lists all allowed suggestion values.
+var ValidDeadcodeSuggestionValues = []string{"remove", "deprecate", "justify"}
+
+// IsValidDeadcodeSuggestion reports whether sug is a valid deadcode suggestion.
+func IsValidDeadcodeSuggestion(sug string) bool {
+	for _, v := range ValidDeadcodeSuggestionValues {
+		if sug == v {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidExplainCauseValues lists all allowed explain-not-found cause values.
+var ValidExplainCauseValues = []string{"stale_index", "name_mismatch", "parse_error", "missing_history_links"}
+
+// IsValidExplainCause reports whether cause is a valid explain-not-found cause.
+func IsValidExplainCause(cause string) bool {
+	for _, v := range ValidExplainCauseValues {
+		if cause == v {
+			return true
+		}
+	}
+	return false
+}
+
+// RiskTierPriority returns a rank for sorting (lower = higher priority).
+func RiskTierPriority(tier string) int {
+	switch tier {
+	case "high":
+		return 0
+	case "medium":
+		return 1
+	case "low":
+		return 2
+	default:
+		return 3
+	}
+}
+
+// ConfidenceRank returns a numeric rank for sorting (lower = higher confidence).
+func ConfidenceRank(conf string) int {
+	switch conf {
+	case "high":
+		return 0
+	case "medium":
+		return 1
+	case "low":
+		return 2
+	default:
+		return 3
 	}
 }

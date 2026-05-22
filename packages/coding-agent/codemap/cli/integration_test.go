@@ -237,13 +237,13 @@ func TestImpactEnvelopeShapeAndDeterminism(t *testing.T) {
 	if !ok {
 		t.Fatal("data missing")
 	}
-	// affected_symbols should be a JSON array.
-	affected, ok := data["affected_symbols"].([]interface{})
+	// findings should be a JSON array (replaces affected_symbols).
+	findings, ok := data["findings"].([]interface{})
 	if !ok {
-		t.Errorf("affected_symbols should be array, got %T", data["affected_symbols"])
+		t.Errorf("findings should be array, got %T", data["findings"])
 	}
-	_ = affected
-	// evidence should be a JSON array.
+	_ = findings
+	// evidence should be a JSON array (top-level evidence).
 	evidence, ok := data["evidence"].([]interface{})
 	if !ok {
 		t.Errorf("evidence should be array, got %T", data["evidence"])

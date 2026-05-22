@@ -155,8 +155,8 @@ func TestImpactDataHasTargetSymbol(t *testing.T) {
 	}
 }
 
-// RED: impact data has affected_symbols array (may be empty).
-func TestImpactDataHasAffectedSymbols(t *testing.T) {
+// GREEN: impact data has findings array (replaces affected_symbols).
+func TestImpactDataHasFindings(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "impact.db")
 	RunIndex(context.Background(), &bytes.Buffer{}, []string{"--db", dbPath}, filepath.Join("..", "testdata", "repos", "parse-mixed"))
@@ -168,17 +168,16 @@ func TestImpactDataHasAffectedSymbols(t *testing.T) {
 	}
 	data, ok := env["data"].(map[string]interface{})
 	if !ok {
-		t.Fatal("data missing from envelope")
+		t.Fatal("data missing or not object")
 	}
-	affected, ok := data["affected_symbols"].([]interface{})
+	findings, ok := data["findings"].([]interface{})
 	if !ok {
-		t.Errorf("affected_symbols should be a JSON array, got %T", data["affected_symbols"])
+		t.Errorf("findings should be a JSON array, got %T", data["findings"])
 	}
-	// The field must be present; value can be empty array.
-	_ = affected
+	_ = findings
 }
 
-// RED: impact data has evidence array.
+// RED: impact data has evidence array (top-level evidence, may be empty).
 func TestImpactDataHasEvidence(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "impact.db")
@@ -246,12 +245,12 @@ func TestImpactMetaSnapshotID(t *testing.T) {
 	}
 }
 
-// RED: affected_symbols must be sorted (deterministic order).
-func TestImpactAffectedSymbolsSorted(t *testing.T) {
+// RED: findings must be in deterministic order: risk_tier priority > confidence > symbol > file.
+func TestImpactFindingsSortedByRiskThenConfidence(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "impact_sorted.db")
 
-	// Setup: create DB, run migrations, insert snapshot with multiple symbols + edges.
+	// Setup: create DB, run migrations, insert snapshot with Target symbol + edges to multiple dependents.
 	db := store.MustOpen(dbPath)
 	if err := store.Migrate(context.Background(), db.DB); err != nil {
 		t.Fatalf("migrate failed: %v", err)
@@ -264,7 +263,6 @@ func TestImpactAffectedSymbolsSorted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Insert files.
 	fileID1, err := store.UpsertFile(context.Background(), tx, tmp, "a.go", "go", "abc", snapID)
 	if err != nil {
 		t.Fatal(err)
@@ -273,29 +271,27 @@ func TestImpactAffectedSymbolsSorted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Insert symbols: Target, Zebra, Alpha.
+	// Insert symbols: Target, Alpha, Beta.
 	ids, err := store.ReplaceFileSymbols(context.Background(), tx, fileID1, []indexer.Symbol{
 		{Name: "Target", Kind: "func", Signature: "func Target()", StartLine: 1, EndLine: 5},
 		{Name: "Alpha", Kind: "func", Signature: "func Alpha()", StartLine: 10, EndLine: 15},
-		{Name: "Zebra", Kind: "func", Signature: "func Zebra()", StartLine: 20, EndLine: 25},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	targetID := ids[0]
 	alphaID := ids[1]
-	_ = ids[2] // Zebra
-	// Add symbols in file2.
 	ids2, err := store.ReplaceFileSymbols(context.Background(), tx, fileID2, []indexer.Symbol{
-		{Name: "Depender", Kind: "func", Signature: "func Depender()", StartLine: 1, EndLine: 5},
+		{Name: "Beta", Kind: "type", Signature: "type Beta int", StartLine: 1, EndLine: 5},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	dependerID := ids2[0]
-	// Add edge: Depender -> Target, Depender -> Alpha.
-	_ = store.UpsertEdge(context.Background(), tx, dependerID, targetID, "calls")
-	_ = store.UpsertEdge(context.Background(), tx, dependerID, alphaID, "calls")
+	betaID := ids2[0]
+	// Add edges: Alpha->Target (calls=high), Beta->Target (type_use=medium).
+	// This creates two incident edges for Target, yielding two findings.
+	_ = store.UpsertEdge(context.Background(), tx, alphaID, targetID, "calls")
+	_ = store.UpsertEdge(context.Background(), tx, betaID, targetID, "type_use")
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
@@ -310,29 +306,41 @@ func TestImpactAffectedSymbolsSorted(t *testing.T) {
 		t.Fatalf("non-JSON: %s", out)
 	}
 	data := env["data"].(map[string]interface{})
-	affected := data["affected_symbols"].([]interface{})
-	if len(affected) == 0 {
-		t.Fatal("expected affected_symbols to have at least one entry")
+	findings, ok := data["findings"].([]interface{})
+	if !ok {
+		t.Fatalf("findings should be []interface{}, got %T", data["findings"])
 	}
-	// Check that it's a string array.
-	for _, a := range affected {
-		if _, ok := a.(string); !ok {
-			t.Errorf("affected_symbols elements should be strings, got %T", a)
+	if len(findings) != 2 {
+		t.Fatalf("expected 2 findings, got %d", len(findings))
+	}
+	// Verify each finding has required fields.
+	for _, f := range findings {
+		fm := f.(map[string]interface{})
+		for _, field := range []string{"symbol_name", "risk_tier", "confidence", "evidence"} {
+			if fm[field] == nil {
+				t.Errorf("finding missing required field: %s", field)
+			}
 		}
 	}
-	// Verify sort: strings should be in ascending order.
-	var prev string
-	for i, a := range affected {
-		s := a.(string)
-		if i > 0 && s < prev {
-			t.Errorf("affected_symbols not sorted: %v", affected)
-		}
-		prev = s
+	// Verify order: Alpha (high/calls) before Beta (medium/type_use).
+	first := findings[0].(map[string]interface{})
+	second := findings[1].(map[string]interface{})
+	if first["symbol_name"] != "Alpha" {
+		t.Errorf("first finding should be Alpha (high/calls), got %v", first["symbol_name"])
+	}
+	if second["symbol_name"] != "Beta" {
+		t.Errorf("second finding should be Beta (medium/type_use), got %v", second["symbol_name"])
+	}
+	if first["risk_tier"] != "high" {
+		t.Errorf("Alpha risk_tier should be high, got %v", first["risk_tier"])
+	}
+	if second["risk_tier"] != "medium" {
+		t.Errorf("Beta risk_tier should be medium, got %v", second["risk_tier"])
 	}
 }
 
-// RED: evidence entries have type and description fields.
-func TestImpactEvidenceFields(t *testing.T) {
+// RED: per-finding evidence entries have type and description fields.
+func TestImpactFindingEvidenceFields(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "impact_evidence.db")
 
@@ -379,21 +387,29 @@ func TestImpactEvidenceFields(t *testing.T) {
 		t.Fatalf("non-JSON: %s", out)
 	}
 	data := env["data"].(map[string]interface{})
-	evidence, ok := data["evidence"].([]interface{})
+	findings, ok := data["findings"].([]interface{})
 	if !ok {
-		t.Fatal("evidence should be an array")
+		t.Fatal("findings should be an array")
 	}
-	for _, e := range evidence {
-		entry, ok := e.(map[string]interface{})
+	for _, f := range findings {
+		fm := f.(map[string]interface{})
+		evidence, ok := fm["evidence"].([]interface{})
 		if !ok {
-			t.Errorf("evidence entry should be object, got %T", e)
+			t.Errorf("finding evidence should be array, got %T", fm["evidence"])
 			continue
 		}
-		if entry["type"] == nil {
-			t.Error("evidence entry missing type field")
-		}
-		if entry["description"] == nil {
-			t.Error("evidence entry missing description field")
+		for _, e := range evidence {
+			entry, ok := e.(map[string]interface{})
+			if !ok {
+				t.Errorf("evidence entry should be object, got %T", e)
+				continue
+			}
+			if entry["type"] == nil {
+				t.Error("evidence entry missing type field")
+			}
+			if entry["description"] == nil {
+				t.Error("evidence entry missing description field")
+			}
 		}
 	}
 }
@@ -414,5 +430,25 @@ func TestImpactExitCode1RuntimeError(t *testing.T) {
 	}
 	if errs, ok := env["errors"].([]interface{}); !ok || len(errs) == 0 {
 		t.Errorf("expected non-empty errors[] on runtime error")
+	}
+}
+
+// TRIANGULATE: impact cap defaults to 50 findings.
+func TestImpactDefaultCap50(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "impact_cap.db")
+	// Use parse-mixed fixture which should have >= 1 symbol with edges
+	RunIndex(context.Background(), &bytes.Buffer{}, []string{"--db", dbPath}, filepath.Join("..", "testdata", "repos", "parse-mixed"))
+
+	out, code := runImpactCmdJSON(t, dbPath, "Valid")
+	if code != 0 {
+		t.Fatalf("impact query failed: %s", out)
+	}
+	var env map[string]interface{}
+	json.Unmarshal(out, &env)
+	data := env["data"].(map[string]interface{})
+	findings := data["findings"].([]interface{})
+	if len(findings) > defaultImpactLimit {
+		t.Errorf("findings count %d exceeds default cap %d", len(findings), defaultImpactLimit)
 	}
 }

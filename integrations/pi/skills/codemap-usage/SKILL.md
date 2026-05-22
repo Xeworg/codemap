@@ -63,6 +63,14 @@ codemap query "<text>"  # deterministic JSON search over indexed entities
 codemap migrate         # explicit schema migration command
 ```
 
+### When running a dead code audit
+
+```bash
+codemap index           # ensure index is fresh
+codemap deadcode        # report unused symbols (up to 100 findings)
+codemap deadcode --limit 50  # reduce output to top 50
+```
+
 ### Installing codemap into Pi runtime
 
 ```bash
@@ -76,6 +84,127 @@ codemap install --dry-run  # preview planned actions without applying
 codemap doctor           # human-readable health report
 codemap doctor --json    # machine-readable diagnostic output
 ```
+
+## Impact analysis — risk tiers
+
+`codemap impact` returns findings sorted by `risk_tier` (high → medium → low), then `confidence`, then name. Use it to scope change impact before refactoring a symbol.
+
+
+```bash
+# Basic impact query
+codemap impact MyFunction
+```
+
+**Key fields in impact findings:**
+
+| Field | What it means |
+|---|---|
+| `risk_tier` | `high` = callers; `medium` = type uses/imports; `low` = weaker links |
+| `confidence` | Strength of evidence for this finding |
+| `evidence[].description` | Shows the edge type (e.g., "linked via calls") |
+
+**Example JSON excerpt:**
+
+```json
+{
+  "data": {
+    "target_symbol": "MyFunction",
+    "findings": [
+      {
+        "symbol_name": "CallerA",
+        "risk_tier": "high",
+        "confidence": "high",
+        "evidence": [{ "type": "symbol_link", "description": "linked via calls" }]
+      }
+    ]
+  }
+}
+```
+
+**Workflow: refactor scoping**
+1. Run `codemap impact <target>`
+2. Filter by `risk_tier: "high"` to identify direct callers
+3. For each high-risk caller, run `codemap symbol <caller>` to verify location
+4. Proceed with changes with full blast-radius context
+
+**Default cap:** 50 findings. High-risk findings are returned first.
+
+## Symbol/history miss troubleshooting
+
+When `codemap symbol` or `codemap history` returns exit 3 or `ok: false`, check the `explain_not_found.cause` field for structured guidance:
+
+```bash
+codemap symbol NonExistent
+# Returns: explain_not_found.cause = "name_mismatch" or "stale_index" etc.
+```
+
+| Cause | Meaning | Action |
+|---|---|---|
+| `stale_index` | Snapshot older than 24 h | Run `codemap index` |
+| `parse_error` | Files failed to parse; symbol may be in a broken file | Check `codemap index` output for parse errors; fix syntax |
+| `name_mismatch` | Symbol not in fresh index; may be renamed/moved | Verify spelling; check for renames |
+| `missing_history_links` | Symbol found but no git history | Rebuild index; ensure repo has commits |
+
+**Workflow: symbol miss**
+1. Note `explain_not_found.cause` from the response
+2. Follow the `recommended_actions` array
+3. Re-run the original command after fixing
+
+**Example: stale index**
+```json
+{
+  "ok": false,
+  "data": {
+    "explain_not_found": {
+      "cause": "stale_index",
+      "recommended_actions": [
+        "Run 'codemap index' to update the snapshot",
+        "Verify the repository path is correct"
+      ]
+    }
+  },
+  "errors": ["symbol \"MyFunction\" not found"]
+}
+```
+
+## Deadcode report usage
+
+`codemap deadcode` reports symbols with zero inbound references. Use it for code hygiene, pre-refactor audits, or cleanup sprints.
+
+```bash
+# Full report (up to 100 findings)
+codemap deadcode
+
+# Limit output
+codemap deadcode --limit 50
+
+# Custom DB path
+codemap deadcode --db myrepo.db
+```
+
+**Key fields in each finding:**
+
+| Field | Description |
+|---|---|
+| `classification` | `unused` (strong signal), `likely-unused`, `uncertain` |
+| `suggestion` | `remove` (safe), `deprecate`, `justify` (keep with reason) |
+| `confidence` | `high` for func/type with zero edges; `medium` for var/const |
+| `evidence` | Always contains `no_inbound_edges` |
+
+**Classification logic:**
+- `func`/`type` with 0 inbound edges → `unused`, `remove`, `high` confidence
+- `var`/`const` with 0 inbound edges → `unused`, `remove`, `medium` confidence
+- Any symbol with > 0 inbound edges → `uncertain`, `justify`, `low` confidence
+
+**Workflow: deadcode audit**
+1. Run `codemap index` first (deadcode analysis depends on current graph)
+2. Run `codemap deadcode` and inspect `classification: "unused"` findings
+3. For each `suggestion: "remove"` with `confidence: "high"`, verify manually before deletion
+4. For `classification: "uncertain"`, add a comment or skip
+
+**Excluded files:** `_test.go`, `vendor/`, `testdata/`, `_pb.go`, `_grpc.go`, `_mock.go`, `_fake.go`, `_generated`, `.gen.go`, `third_party/` — these are never flagged.
+
+**Default cap:** 100 findings, sorted by severity (unused first).
 
 ## DB behavior (default)
 
@@ -111,7 +240,7 @@ All commands return deterministic JSON with this envelope:
 ```json
 {
   "schema_version": "1.0",
-  "command": "index|symbol|history|impact|query|migrate|install|doctor",
+  "command": "index|symbol|history|impact|query|migrate|deadcode|install|doctor",
   "ok": true,
   "data": { ... },
   "errors": [],

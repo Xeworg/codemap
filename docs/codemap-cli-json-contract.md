@@ -24,7 +24,7 @@ Every response is a JSON object with these top-level fields:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `schema_version` | string | Yes | Always `"1.0"` for MVP. |
-| `command` | string | Yes | One of: `index`, `symbol`, `history`, `install`, `doctor`. |
+| `command` | string | Yes | One of: `index`, `symbol`, `history`, `migrate`, `impact`, `query`, `deadcode`, `install`, `doctor`. |
 | `ok` | bool | Yes | `true` if the command succeeded; `false` if errors occurred. |
 | `data` | object | Yes | Command-specific payload (see below). |
 | `errors` | `null` or `string[]` | Yes | `null` on success; array of error strings on failure. |
@@ -83,6 +83,8 @@ Every response includes:
 
 ### `codemap symbol <name>`
 
+**Success (found)**
+
 ```json
 {
   "schema_version": "1.0",
@@ -106,10 +108,62 @@ Every response includes:
 }
 ```
 
+**Not found (explain_not_found payload)**
+
+When the symbol does not exist in the index, the CLI returns `ok: false` with an `explain_not_found` block in `data`:
+
+```json
+{
+  "schema_version": "1.0",
+  "command": "symbol",
+  "ok": false,
+  "data": {
+    "explain_not_found": {
+      "cause": "stale_index",
+      "recommended_actions": [
+        "Run 'codemap index' to update the snapshot",
+        "Verify the repository path is correct"
+      ]
+    }
+  },
+  "errors": ["symbol \"MyFunction\" not found"],
+  "meta": { ... }
+}
+```
+
 - `confidence`: one of `high`, `medium`, `low`. Default: `high` for func/type/interface, `medium` for var/const, `low` otherwise.
-- `evidence`: always non-empty. Minimum one item of type `direct`.
+- `evidence`: always non-empty on success. Minimum one item of type `direct`.
+- **`explain_not_found.cause`** enum: `stale_index`, `parse_error`, `name_mismatch`, `missing_history_links`
+- **`explain_not_found.recommended_actions`**: array of strings with fix guidance, determined by cause
 
 ### `codemap history <name>`
+
+**Success (history found)**
+
+```json
+{
+  "schema_version": "1.0",
+  "command": "history",
+  "ok": true,
+  "data": {
+    "symbol_name": "MyFunction",
+    "confidence": "medium",
+    "evidence": [
+      {
+        "type": "commit_link",
+        "description": "modify on 2026-05-10 (a1b2c3d4)",
+        "source": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+      }
+    ]
+  },
+  "errors": null,
+  "meta": { ... }
+}
+```
+
+**No history found (symbol exists but no git history links)**
+
+When the symbol is in the index but has no associated commit history, the CLI returns `ok: true` with `confidence: low` and an `explain_not_found` block that includes `cause` and `recommended_actions`:
 
 ```json
 {
@@ -120,19 +174,50 @@ Every response includes:
     "symbol_name": "MyFunction",
     "confidence": "low",
     "evidence": [
-      {
-        "type": "no_history",
-        "description": "no commit history found for this symbol"
-      }
-    ]
+      { "type": "no_history", "description": "no commit history found for this symbol" }
+    ],
+    "explain_not_found": {
+      "cause": "missing_history_links",
+      "recommended_actions": [
+        "Run 'codemap index' to rebuild history links",
+        "Ensure the repository has commit history",
+        "Symbol exists but has no git history associations"
+      ]
+    }
   },
   "errors": null,
   "meta": { ... }
 }
 ```
 
+**Symbol not found (explain_not_found payload)**
+
+When the symbol does not exist in the index, the CLI returns `ok: false` with an `explain_not_found` block:
+
+```json
+{
+  "schema_version": "1.0",
+  "command": "history",
+  "ok": false,
+  "data": {
+    "explain_not_found": {
+      "cause": "name_mismatch",
+      "recommended_actions": [
+        "Verify the symbol name is spelled correctly",
+        "Check for renamed or moved symbols",
+        "Run 'codemap index' if the code was recently changed"
+      ]
+    }
+  },
+  "errors": ["symbol \"MyFunction\" not found"],
+  "meta": { ... }
+}
+```
+
 - `confidence`: `medium` if history entries exist; `low` if none.
 - `evidence`: commit links (type: `commit_link`) when history exists; `no_history` item otherwise.
+- **`explain_not_found.cause`** enum for history: `stale_index`, `parse_error`, `name_mismatch`, `missing_history_links`
+- **`explain_not_found.recommended_actions`**: array of strings with fix guidance, determined by cause
 
 ---
 
@@ -142,9 +227,9 @@ Only these values are valid:
 
 | Value | Meaning |
 |---|---|
-| `high` | Strong evidence: direct symbol extraction or strong link strength |
-| `medium` | Moderate evidence: history entries present |
-| `low` | Weak or no evidence: hypothesis or no data |
+| `high` | Strong evidence: direct symbol extraction, calls/type_use edge, or confirmed zero edges for func/type |
+| `medium` | Moderate evidence: history entries present, `imports`/`casts` edge, or var/const classification |
+| `low` | Weak or no evidence: hypothesis, weaker edge types, or uncertain classification |
 
 ---
 
@@ -181,13 +266,227 @@ If one or more `.go` files fail to parse during `index`:
 
 ---
 
-## Incremental Indexing
+## `codemap impact <symbol>`
 
-On repeated `index` calls:
+Returns all symbols that depend on or reference the target symbol, sorted by risk tier then confidence.
 
-- Unchanged files (hash unchanged) are skipped (not reparsed).
-- Changed/new files are reparsed.
-- Deleted files (present in previous snapshot, absent now) are removed from the index.
+```json
+{
+  "schema_version": "1.0",
+  "command": "impact",
+  "ok": true,
+  "data": {
+    "target_symbol": "MyFunction",
+    "findings": [
+      {
+        "symbol_name": "CallerA",
+        "file": "pkg/caller.go",
+        "kind": "func",
+        "start_line": 20,
+        "end_line": 25,
+        "risk_tier": "high",
+        "confidence": "high",
+        "evidence": [
+          {
+            "type": "symbol_link",
+            "description": "linked via calls",
+            "source": "pkg/caller.go"
+          }
+        ]
+      },
+      {
+        "symbol_name": "TypeUser",
+        "file": "pkg/user.go",
+        "kind": "type",
+        "start_line": 5,
+        "end_line": 10,
+        "risk_tier": "medium",
+        "confidence": "high",
+        "evidence": [
+          {
+            "type": "symbol_link",
+            "description": "linked via type_use",
+            "source": "pkg/user.go"
+          }
+        ]
+      }
+    ],
+    "evidence": []
+  },
+  "errors": null,
+  "meta": { ... }
+}
+```
+
+### Finding fields
+
+| Field | Type | Description |
+|---|---|---|
+| `symbol_name` | string | Name of the affected symbol |
+| `file` | string | File path of the affected symbol |
+| `kind` | string | Symbol kind (func, type, var, etc.) |
+| `start_line` | int | Start line of the symbol definition |
+| `end_line` | int | End line of the symbol definition |
+| `risk_tier` | string | `high`, `medium`, or `low` |
+| `confidence` | string | `high`, `medium`, or `low` |
+| `evidence` | array | Always non-empty; at least one `symbol_link` item |
+
+### `risk_tier` derivation
+
+| Edge type | Risk tier |
+|---|---|---|
+| `calls` | `high` |
+| `type_use`, `references` | `medium` |
+| `imports`, `casts`, `subtype`, `exports` | `medium` |
+| (all others) | `low` |
+
+### `confidence` derivation
+
+| Condition | Confidence |
+|---|---|---|
+| `calls`/`type_use` edge + `func`/`type`/`interface` kind | `high` |
+| `calls`/`type_use` edge + `var`/`const` kind | `medium` |
+| `imports`/`casts` edge | `medium` |
+| (all others) | `low` |
+
+### Default cap behavior
+
+`findings` is capped at **50 findings** by default. Results are sorted by `risk_tier` (high first), then `confidence` (high first), then `symbol_name` (alphabetical), then `file` before the cap is applied. The cap truncates lower-priority findings; there is no signal in the response when truncation occurs.
+
+
+Exit codes: `0` success, `1` runtime error, `2` validation error, `3` no index / symbol not found.
+
+---
+
+## `codemap deadcode`
+
+Reports symbols with zero inbound references, classified as unused/likely-unused.
+
+```json
+{
+  "schema_version": "1.0",
+  "command": "deadcode",
+  "ok": true,
+  "data": {
+    "findings": [
+      {
+        "symbol_name": "UnusedFunction",
+        "file": "pkg/foo.go",
+        "kind": "func",
+        "start_line": 30,
+        "end_line": 35,
+        "classification": "unused",
+        "suggestion": "remove",
+        "confidence": "high",
+        "evidence": [
+          {
+            "type": "no_inbound_edges",
+            "description": "symbol has no inbound references in the code graph"
+          }
+        ]
+      },
+      {
+        "symbol_name": "MaybeUnused",
+        "file": "pkg/bar.go",
+        "kind": "type",
+        "start_line": 5,
+        "end_line": 9,
+        "classification": "likely-unused",
+        "suggestion": "remove",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "type": "no_inbound_edges",
+            "description": "symbol has no inbound references in the code graph"
+          }
+        ]
+      }
+    ]
+  },
+  "errors": null,
+  "meta": { ... }
+}
+```
+
+### Finding fields
+
+| Field | Type | Description |
+|---|---|---|
+| `symbol_name` | string | Name of the dead symbol |
+| `file` | string | File path |
+| `kind` | string | Symbol kind |
+| `start_line` | int | Start line |
+| `end_line` | int | End line |
+| `classification` | string | `unused`, `likely-unused`, or `uncertain` |
+| `suggestion` | string | `remove`, `deprecate`, or `justify` |
+| `confidence` | string | `high`, `medium`, or `low` |
+| `evidence` | array | Always non-empty; `no_inbound_edges` item |
+
+### `classification` values
+
+| Value | Meaning |
+|---|---|---|
+| `unused` | Zero inbound edges confirmed; strong signal |
+| `likely-unused` | Indirect/weak signal; symbol kind suggests caution |
+| `uncertain` | Some edges exist but may be dead-code-adjacent |
+
+### `suggestion` values
+
+| Value | Meaning |
+|---|---|---|
+| `remove` | Safe to delete; strong unused signal |
+| `deprecate` | Mark for future removal or migration path |
+| `justify` | Retain only with documented reason; uncertain signal |
+
+### Classification and suggestion mapping
+
+| Symbol kind | Inbound edges | Classification | Suggestion | Confidence |
+|---|---|---|---|---|
+| `func`, `type` | 0 | `unused` | `remove` | `high` |
+| `var`, `const` | 0 | `unused` | `remove` | `medium` |
+| (any other kind) | 0 | `unused` | `remove` | `low` |
+| (any kind) | > 0 | `uncertain` | `justify` | `low` |
+
+### Default cap behavior
+
+`findings` is capped at **100 findings** by default. Results are sorted by `classification` rank (`unused` first), then `confidence` (high first), then `symbol_name` (alphabetical), then `file` before the cap is applied. The cap truncates lower-priority findings; there is no signal in the response when truncation occurs.
+
+### Exclusions
+
+Files matching any of the following patterns are excluded from deadcode analysis:
+`_generated`, `.gen.go`, `_test.go`, `_mock.go`, `_fake.go`, `testdata/`, `vendor/`, `third_party/`, `_pb.go`, `.pb.go` (protobuf), `_grpc.go` (grpc).
+
+### Command flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--db` | auto | Path to SQLite database |
+| `--limit` | 100 | Maximum findings to return |
+
+Exit codes: `0` success, `1` runtime error, `2` validation error, `3` no index found.
+
+---
+
+## `explain_not_found` cause enum
+
+When `symbol` or `history` cannot resolve a symbol, the response `data` contains an `explain_not_found` block:
+
+
+```json
+"data": {
+  "explain_not_found": {
+    "cause": "<cause-value>",
+    "recommended_actions": ["...", "..."]
+  }
+}
+```
+
+| Cause | Trigger | Recommended actions |
+|---|---|---|
+| `stale_index` | Snapshot older than 24 h or unreadable timestamp | Run `codemap index`; verify repo path |
+| `parse_error` | One or more files failed to parse in the last index | Re-run `codemap index`; check syntax; review parse_errors table |
+| `name_mismatch` | Fresh snapshot, no parse errors, symbol absent | Verify spelling; check for renames/moves; re-index if recently changed |
+| `missing_history_links` | Symbol exists but has no git history associations | Rebuild index; ensure repo has commits |
 
 ---
 

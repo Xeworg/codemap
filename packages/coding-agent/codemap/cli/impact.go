@@ -10,6 +10,16 @@ import (
 	"codrut/packages/coding-agent/codemap/store"
 )
 
+// defaultImpactLimit is the maximum number of findings returned per impact query.
+const defaultImpactLimit = 50
+
+// riskTierPriority maps risk tier to sort priority (lower = higher priority).
+var riskTierPriority = map[string]int{
+	"high":   0,
+	"medium": 1,
+	"low":    2,
+}
+
 // RunImpact runs the "impact" command and returns an exit code.
 func RunImpact(ctx context.Context, w io.Writer, args []string, repoRoot string) int {
 	fs := flag.NewFlagSet("impact", flag.ContinueOnError)
@@ -74,59 +84,80 @@ func RunImpact(ctx context.Context, w io.Writer, args []string, repoRoot string)
 		return 1
 	}
 
-	// Build affected symbols set (other end of each edge).
-	affectedSet := make(map[string]bool)
+	// Build findings per affected symbol.
+	findings := make(map[int64]*ImpactFinding) // dedup by symbol ID
 	for _, e := range edges {
 		otherID := e.FromSymbolID
 		if otherID == sym.ID {
 			otherID = e.ToSymbolID
 		}
+		if otherID == sym.ID {
+			continue // skip self-edge
+		}
+		if _, seen := findings[otherID]; seen {
+			continue
+		}
 		other, err := store.GetSymbolByID(ctx, db.DB, otherID)
 		if err != nil || other == nil {
 			continue
 		}
-		affectedSet[other.Name] = true
-	}
-	var affected []string
-	for name := range affectedSet {
-		affected = append(affected, name)
-	}
-	sort.Strings(affected)
-	if affected == nil {
-		affected = []string{}
+		riskTier := deriveRiskTier(e.EdgeType)
+		confidence := deriveImpactConfidence(e.EdgeType, other.Kind)
+		evidence := []EvidenceEntry{
+			{
+				Type:        "symbol_link",
+				Description: fmt.Sprintf("linked via %s", e.EdgeType),
+				Source:      other.File,
+			},
+		}
+		findings[otherID] = &ImpactFinding{
+			SymbolName: other.Name,
+			File:       other.File,
+			Kind:       other.Kind,
+			StartLine:  other.StartLine,
+			EndLine:    other.EndLine,
+			RiskTier:   riskTier,
+			Confidence: confidence,
+			Evidence:   evidence,
+		}
 	}
 
-	// Build evidence entries.
-	var evidence []EvidenceEntry
-	for _, e := range edges {
-		otherID := e.FromSymbolID
-		if otherID == sym.ID {
-			otherID = e.ToSymbolID
-		}
-		other, err := store.GetSymbolByID(ctx, db.DB, otherID)
-		if err != nil || other == nil {
-			continue
-		}
-		desc := fmt.Sprintf("linked via %s", e.EdgeType)
-		evidence = append(evidence, EvidenceEntry{
-			Type:        "symbol_link",
-			Description: desc,
-			Source:      other.File,
-		})
+	// Convert to slice and sort.
+	var sorted []ImpactFinding
+	for _, f := range findings {
+		sorted = append(sorted, *f)
 	}
-	if evidence == nil {
-		evidence = []EvidenceEntry{}
+	// Ensure non-nil slice for deterministic JSON serialization.
+	if sorted == nil {
+		sorted = []ImpactFinding{}
 	}
-	// Sort evidence by description for determinism.
-	sort.SliceStable(evidence, func(i, j int) bool {
-		return evidence[i].Description < evidence[j].Description
+	sort.SliceStable(sorted, func(i, j int) bool {
+		ri := RiskTierPriority(sorted[i].RiskTier)
+		rj := RiskTierPriority(sorted[j].RiskTier)
+		if ri != rj {
+			return ri < rj
+		}
+		ci := ConfidenceRank(sorted[i].Confidence)
+		cj := ConfidenceRank(sorted[j].Confidence)
+		if ci != cj {
+			return ci < cj
+		}
+		if sorted[i].SymbolName != sorted[j].SymbolName {
+			return sorted[i].SymbolName < sorted[j].SymbolName
+		}
+		return sorted[i].File < sorted[j].File
 	})
+
+	// Apply cap.
+	if len(sorted) > defaultImpactLimit {
+		sorted = sorted[:defaultImpactLimit]
+	}
 
 	stale := StaleNow(meta.IndexedAt)
 	data := ImpactData{
-		TargetSymbol:    sym.Name,
-		AffectedSymbols: affected,
-		Evidence:        evidence,
+		TargetSymbol: sym.Name,
+		Findings:     sorted,
+		Evidence:     []EvidenceEntry{},
 	}
 
 	envelope := NewEnvelope("impact", true, data, nil, Meta{
@@ -138,4 +169,39 @@ func RunImpact(ctx context.Context, w io.Writer, args []string, repoRoot string)
 	out, _ := envelope.Encode()
 	_, _ = w.Write(out)
 	return 0
+}
+
+// deriveRiskTier maps an edge type to a risk tier heuristic.
+// Order: calls > type_use > imports > casts > default=medium.
+func deriveRiskTier(edgeType string) string {
+	switch edgeType {
+	case "calls":
+		return "high"
+	case "type_use", "references":
+		return "medium"
+	case "imports", "casts", "subtype", "exports":
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+// deriveImpactConfidence returns a confidence level based on edge type and symbol kind.
+func deriveImpactConfidence(edgeType, symbolKind string) string {
+	// Strong edges (calls, type_use) with important kinds get high confidence.
+	if edgeType == "calls" || edgeType == "type_use" {
+		switch symbolKind {
+		case "func", "type", "interface":
+			return "high"
+		case "var", "const":
+			return "medium"
+		}
+	}
+	// Edge quality degrades for weaker link types.
+	switch edgeType {
+	case "imports", "casts":
+		return "medium"
+	default:
+		return "low"
+	}
 }

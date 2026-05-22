@@ -54,6 +54,8 @@ func RunSymbol(ctx context.Context, w io.Writer, args []string, repoRoot string)
 		return 3
 	}
 
+	stale := StaleNow(metaOut.IndexedAt)
+
 	// Lookup symbol.
 	sym, err := store.GetSymbolByName(ctx, db.DB, symbolArg)
 	if err != nil {
@@ -61,11 +63,24 @@ func RunSymbol(ctx context.Context, w io.Writer, args []string, repoRoot string)
 		return 1
 	}
 	if sym == nil {
-		WriteErrorEnvelope(w, "symbol", "symbol \""+symbolArg+"\" not found", EmptyMeta())
+		// Not found: derive cause and return structured explain_not_found.
+		cause, actions := DeriveSymbolNotFoundCause(ctx, db.DB, symbolArg, false)
+		enf := ExplainNotFound{
+			Cause:              cause,
+			RecommendedActions: actions,
+		}
+		envelope := NewEnvelope("symbol", false, map[string]interface{}{
+			"explain_not_found": enf,
+		}, []string{"symbol \"" + symbolArg + "\" not found"}, Meta{
+			SnapshotID: metaOut.SnapshotID,
+			HeadRef:    metaOut.HeadRef,
+			IndexedAt:  metaOut.IndexedAt,
+			IsStale:    stale,
+		})
+		out, _ := envelope.Encode()
+		_, _ = w.Write(out)
 		return 3
 	}
-
-	stale := StaleNow(metaOut.IndexedAt)
 
 	evidence := DefaultEvidence()
 	evidence = append(evidence, EvidenceEntry{
