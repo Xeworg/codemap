@@ -2,7 +2,8 @@
  * CodeMap Pi Extension — registers codemap tools with Pi's ExtensionAPI.
  *
  * This file replaces the legacy integrations/pi/tools/codemap-tool.json artifact.
- * It registers three tools: index, symbol, and history.
+ * It registers all CLI commands: index, symbol, history, impact, deadcode,
+ * query, install, and doctor.
  *
  * Pi v0.35+ loads this from ~/.pi/agent/extensions/codemap-extension.ts
  * (installed by `codemap install`).
@@ -135,6 +136,191 @@ export default function (pi: ExtensionAPI) {
 			1: "Runtime error",
 			2: "Validation error",
 			3: "Not found (no index or symbol absent)",
+		},
+	});
+
+	pi.registerTool({
+		name: "codemap_impact",
+		description:
+			"Show symbols impacted by (depend on or relate to) a given symbol, with risk tier and confidence evidence.",
+		arguments: [
+			{
+				name: "symbol",
+				type: "string",
+				description: "Symbol name to query impact for",
+				required: true,
+			},
+		],
+		flags: [
+			{
+				name: "--db",
+				type: "string",
+				description:
+					"Path to SQLite DB (optional; default: ~/.cache/codemap/<repo-hash>.db)",
+				required: false,
+			},
+		],
+		output: {
+			schema: "1.0",
+			fields: {
+				ok: "bool — true if query ran",
+				"data.target_symbol": "string — the queried symbol",
+				"data.findings": "array — impacted symbols with risk_tier and confidence",
+				"meta.snapshot_id": "int",
+				"meta.is_stale": "bool",
+			},
+		},
+		exit_codes: {
+			0: "Success",
+			1: "Runtime error",
+			2: "Validation error (missing symbol name)",
+			3: "Not found (no index or symbol absent)",
+		},
+	});
+
+	pi.registerTool({
+		name: "codemap_deadcode",
+		description:
+			"Report symbols classified as unused, likely-unused, or uncertain based on inbound edge counts and heuristic entrypoint detection.",
+		arguments: [],
+		flags: [
+			{
+				name: "--db",
+				type: "string",
+				description:
+					"Path to SQLite DB (optional; default: ~/.cache/codemap/<repo-hash>.db)",
+				required: false,
+			},
+			{
+				name: "--limit",
+				type: "int",
+				description: "Maximum number of findings to return (default: 100)",
+				required: false,
+			},
+		],
+		output: {
+			schema: "1.0",
+			fields: {
+				ok: "bool — true if query ran",
+				"data.findings": "array — dead code findings with classification, suggestion, confidence, evidence",
+				"meta.snapshot_id": "int",
+				"meta.is_stale": "bool",
+			},
+		},
+		exit_codes: {
+			0: "Success",
+			1: "Runtime error",
+			2: "Validation error",
+			3: "No index found (run 'codemap index' first)",
+		},
+	});
+
+	pi.registerTool({
+		name: "codemap_query",
+		description:
+			"Look up symbols by exact name or prefix match. Returns deterministic JSON with all matches.",
+		arguments: [
+			{
+				name: "term",
+				type: "string",
+				description: "Symbol name or prefix to search for",
+				required: true,
+			},
+		],
+		flags: [
+			{
+				name: "--db",
+				type: "string",
+				description:
+					"Path to SQLite DB (optional; default: ~/.cache/codemap/<repo-hash>.db)",
+				required: false,
+			},
+		],
+		output: {
+			schema: "1.0",
+			fields: {
+				ok: "bool — true if query ran",
+				"data.query": "string — the search term",
+				"data.matches": "array — matching symbols with name, kind, file, signature",
+				"data.count": "int — total matches",
+				"meta.snapshot_id": "int",
+				"meta.is_stale": "bool",
+			},
+		},
+		exit_codes: {
+			0: "Success",
+			1: "Runtime error",
+			2: "Validation error (missing term)",
+			3: "No index found (run 'codemap index' first)",
+		},
+	});
+
+	pi.registerTool({
+		name: "codemap_install",
+		description:
+			"Install or update the codemap skill and extension into the Pi runtime. Safe to re-run.",
+		arguments: [],
+		flags: [
+			{
+				name: "--dry-run",
+				type: "bool",
+				description: "Check and report actions without applying",
+				required: false,
+			},
+			{
+				name: "--json",
+				type: "bool",
+				description: "Output machine-readable JSON",
+				required: false,
+			},
+			{
+				name: "--tui",
+				type: "bool",
+				description: "Run interactive TUI installer",
+				required: false,
+			},
+		],
+		output: {
+			schema: "1.0",
+			fields: {
+				status: "string — applied|up-to-date|dry-run|error",
+				checks: "array — installation checks with level and message",
+				db_path: "string — default DB path",
+				db_exists: "bool",
+			},
+		},
+		exit_codes: {
+			0: "Success (applied, up-to-date, or dry-run)",
+			1: "Error",
+			2: "Flag/validation error",
+		},
+	});
+
+	pi.registerTool({
+		name: "codemap_doctor",
+		description:
+			"Diagnose codemap environment and Pi integration status. Returns pass/warn with detailed check list.",
+		arguments: [],
+		flags: [
+			{
+				name: "--json",
+				type: "bool",
+				description: "Output machine-readable JSON",
+				required: false,
+			},
+		],
+		output: {
+			schema: "1.0",
+			fields: {
+				status: "string — pass|warn",
+				checks: "array — diagnostic checks with check, level, and message",
+				db_path: "string — default DB path",
+				db_exists: "bool",
+			},
+		},
+		exit_codes: {
+			0: "Pass or warn",
+			1: "Fail or runtime error",
 		},
 	});
 }
