@@ -19,6 +19,7 @@ type IndexResult struct {
 	SymbolsFound int
 	EdgesFound   int
 	Entries      []FileEntry // files processed (new/changed) with their symbols
+	Deleted      []FileEntry // files removed since last snapshot
 	Errored      bool
 }
 
@@ -53,6 +54,7 @@ func RunIndex(ctx context.Context, req IndexRequest) (IndexResult, error) {
 	result.FilesNew = len(diff.New)
 	result.FilesChanged = len(diff.Changed)
 	result.FilesDeleted = len(diff.Deleted)
+	result.Deleted = diff.Deleted
 
 	// Process changed/new files with fail-soft parsing.
 	var entries []FileEntry

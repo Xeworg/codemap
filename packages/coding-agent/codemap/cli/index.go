@@ -96,6 +96,19 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 		return 0
 	}
 
+	// Collect paths from changed/new/deleted entries for cache invalidation.
+	var affectedPaths []string
+	for _, e := range result.Entries {
+		affectedPaths = append(affectedPaths, e.Path)
+	}
+	for _, e := range result.Deleted {
+		affectedPaths = append(affectedPaths, e.Path)
+	}
+	// Invalidate stale cache entries for affected files before writing new data.
+	go func() {
+		InvalidateCacheForFilePaths(context.Background(), db.DB, affectedPaths)
+	}()
+
 	// Persist snapshot + files + symbols under transaction.
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -154,6 +167,12 @@ func RunIndex(ctx context.Context, w io.Writer, args []string, repoRoot string) 
 		WriteErrorEnvelope(w, "index", "commit: "+err.Error(), EmptyMeta())
 		return 1
 	}
+
+	// Cache warm: background cache pre-computation for top hot symbols.
+	// Fail-soft — errors are logged but do not affect the index response.
+	go func() {
+		store.WarmCacheForSnapshot(context.Background(), db.DB, 100, 3, 3)
+	}()
 
 	// Emit JSON envelope.
 	metaOut, _ := store.GetLatestSnapshotMeta(ctx, db.DB)
@@ -310,6 +329,57 @@ func getFileHashesForSnapshot(ctx context.Context, db *sql.DB, snapshotID int64)
 		m[path] = hash
 	}
 	return m, rows.Err()
+}
+
+// InvalidateCacheForFilePaths removes cached impact entries for symbols in the
+// given file paths. This is called after a re-index to clear stale cache entries
+// for files that were changed or deleted.
+func InvalidateCacheForFilePaths(ctx context.Context, db *sql.DB, paths []string) {
+	if len(paths) == 0 {
+		return
+	}
+	// Collect symbol IDs for all affected files.
+	var symbolIDs []int64
+	for _, path := range paths {
+		ids, err := getSymbolIDsForFile(ctx, db, path)
+		if err != nil {
+			slog.Warn("InvalidateCacheForFilePaths: getSymbolIDsForFile", "path", path, "err", err)
+			continue
+		}
+		symbolIDs = append(symbolIDs, ids...)
+	}
+	for _, symID := range symbolIDs {
+		if err := store.InvalidateCacheForSymbol(ctx, db, symID); err != nil {
+			slog.Warn("InvalidateCacheForFilePaths: InvalidateCacheForSymbol",
+				"symbolID", symID, "err", err)
+		}
+	}
+}
+
+// getSymbolIDsForFile returns the symbol IDs for a file in the most recent snapshot.
+func getSymbolIDsForFile(ctx context.Context, db *sql.DB, path string) ([]int64, error) {
+	meta, err := store.GetLatestSnapshotMeta(ctx, db)
+	if err != nil || meta.SnapshotID == 0 {
+		return nil, err
+	}
+	rows, err := db.QueryContext(ctx,
+		`SELECT s.id FROM symbols s
+		 JOIN files f ON f.id = s.file_id
+		 WHERE f.path = ? AND f.snapshot_id = ?`,
+		path, meta.SnapshotID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // buildSymbolNameMap creates a lookup from (Name, Recv) → symbolID for the
