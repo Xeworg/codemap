@@ -55,5 +55,31 @@ OUT=$($BINARY install --dry-run --json)
 echo "$OUT" | grep -q '"status": "dry-run"'
 echo "PASS"
 
+echo "=== Smoke: graph-query ==="
+OUT=$($BINARY --repo "$REPO" graph-query --db "$TMPDB/codemap.db" Add)
+echo "$OUT" | grep -q '"ok":true'
+echo "$OUT" | grep -q '"command":"graph-query"'
+echo "PASS"
+
+echo "=== Smoke: graph-query with depth ==="
+OUT=$($BINARY --repo "$REPO" graph-query --db "$TMPDB/codemap.db" --depth 1 Add)
+echo "$OUT" | grep -q '"ok":true'
+echo "PASS"
+
+echo "=== Smoke: graph-query with no-cache ==="
+OUT=$($BINARY --repo "$REPO" graph-query --db "$TMPDB/codemap.db" --no-cache Add)
+echo "$OUT" | grep -q '"ok":true'
+echo "PASS"
+
+echo "=== Smoke: impact --depth 1 ==="
+OUT=$($BINARY --repo "$REPO" impact --db "$TMPDB/codemap.db" --depth 1 Add)
+echo "$OUT" | grep -q '"ok":true'
+echo "PASS"
+
+echo "=== Smoke: impact --no-cache ==="
+OUT=$($BINARY --repo "$REPO" impact --db "$TMPDB/codemap.db" --no-cache Add)
+echo "$OUT" | grep -q '"ok":true'
+echo "PASS"
+
 echo ""
 echo "=== ALL SMOKE TESTS PASSED ==="
