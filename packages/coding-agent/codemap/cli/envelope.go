@@ -83,6 +83,8 @@ type ImpactFinding struct {
 	EndLine    int             `json:"end_line,omitempty"`
 	RiskTier   string          `json:"risk_tier"`
 	Confidence string          `json:"confidence"`
+	Depth      int             `json:"depth,omitempty"`
+	EdgePath   []string        `json:"edge_path,omitempty"`
 	Evidence   []EvidenceEntry `json:"evidence"`
 }
 
