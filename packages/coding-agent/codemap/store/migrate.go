@@ -34,6 +34,7 @@ func (m *MigrationRunner) Migrate(ctx context.Context) error {
 		{"0001_init", migrations.Init0001, nil},
 		{"0002_link_strength", migrations.Init0002, m.checkLinkStrengthMissing},
 		{"0003_snapshot_stats", migrations.Init0003, m.checkSnapshotStatsMissing},
+		{"0004_graph_cache", migrations.Init0004, nil},
 	}
 
 	for _, mig := range migrations {

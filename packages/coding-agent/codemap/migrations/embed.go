@@ -10,3 +10,6 @@ var Init0002 string
 
 //go:embed 0003_snapshot_stats.sql
 var Init0003 string
+
+//go:embed 0004_graph_cache.sql
+var Init0004 string

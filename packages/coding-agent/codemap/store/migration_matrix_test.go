@@ -270,8 +270,8 @@ func TestMigrationRunnerCurrentVersion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ver != "0003_snapshot_stats" {
-			t.Errorf("want 0003_snapshot_stats, got %s", ver)
+		if ver != "0004_graph_cache" {
+			t.Errorf("want 0004_graph_cache, got %s", ver)
 		}
 	})
 }
