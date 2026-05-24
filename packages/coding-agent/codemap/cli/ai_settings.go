@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 
 	"codrut/packages/coding-agent/codemap/store"
 )
@@ -157,6 +158,18 @@ func getAISetting(ctx context.Context, w io.Writer, args []string, repoRoot stri
 		val = settings.Minimax.BaseURL
 	case "minimax.timeout_sec":
 		val = fmt.Sprintf("%d", settings.Minimax.TimeoutSec)
+	case "minimax.api_key":
+		// Never expose the key value. Report only presence/absence.
+		hasKey, err := store.HasMinimaxKeyInKeyring(ctx)
+		if err != nil {
+			val = "error checking keyring"
+		} else if hasKey {
+			val = "[configured in keyring]"
+		} else if os.Getenv("MINIMAX_API_KEY") != "" {
+			val = "[configured via MINIMAX_API_KEY env var]"
+		} else {
+			val = "[not configured]"
+		}
 	default:
 		WriteErrorEnvelope(w, "ai-settings get", "unknown key: "+key, EmptyMeta())
 		return 2
@@ -214,6 +227,17 @@ func setAISetting(ctx context.Context, w io.Writer, args []string, repoRoot stri
 		settings.Minimax.BaseURL = value
 	case "minimax.timeout_sec":
 		fmt.Sscanf(value, "%d", &settings.Minimax.TimeoutSec)
+	case "minimax.api_key":
+		if err := store.StoreMinimaxKey(ctx, value); err != nil {
+			WriteErrorEnvelope(w, "ai-settings set", "failed to store api key: "+err.Error(), EmptyMeta())
+			return 1
+		}
+		// Confirm secure storage, never echo the value.
+		envelope := NewEnvelope("ai-settings set", true, map[string]string{
+			"key": key, "status": "stored in OS keyring", "provider": "minimax"}, nil, EmptyMeta())
+		out, _ := envelope.Encode()
+		_, _ = w.Write(out)
+		return 0
 	default:
 		WriteErrorEnvelope(w, "ai-settings set", "unknown key: "+key, EmptyMeta())
 		return 2

@@ -69,8 +69,10 @@ func TestSaveAndGetAISettings(t *testing.T) {
 	if loaded.Ollama.Model != "mistral" {
 		t.Errorf("ollama model: want mistral, got %s", loaded.Ollama.Model)
 	}
-	if loaded.Minimax.APIKey != "TESTKEY" {
-		t.Errorf("minimax api key: want sk-testkey123, got %s", loaded.Minimax.APIKey)
+	// APIKey must never be serialized to DB — it is excluded via json:"-"
+	// and resolved at call time via GetMinimaxKey (keyring/env-var).
+	if loaded.Minimax.APIKey != "" {
+		t.Errorf("minimax api key: should not be persisted in DB, got %q", loaded.Minimax.APIKey)
 	}
 }
 

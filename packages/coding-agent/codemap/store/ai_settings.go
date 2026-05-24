@@ -25,13 +25,36 @@ func (p Provider) IsValid() bool {
 }
 
 // ProviderConfig holds connection parameters for a single provider.
+// APIKey is intentionally excluded from JSON serialization (json:"-").
+// Always resolve it via GetMinimaxKey at call time.
 type ProviderConfig struct {
 	Provider   Provider `json:"provider"`
 	Model      string   `json:"model"`
 	BaseURL    string   `json:"base_url"`
-	APIKey     string   `json:"api_key,omitempty"`
+	APIKey     string   `json:"-"` // never serialized; use GetMinimaxKey instead
 	TimeoutSec int      `json:"timeout_sec"`
 	Extra      *string  `json:"extra,omitempty"` // optional JSON blob
+}
+
+// MarshalJSON implements json.Marshaler for ProviderConfig,
+// intentionally excluding APIKey from serialization for security.
+func (c ProviderConfig) MarshalJSON() ([]byte, error) {
+	withoutKey := struct {
+		Provider   Provider `json:"provider"`
+		Model      string   `json:"model"`
+		BaseURL    string   `json:"base_url"`
+		APIKey     string   `json:"-"` // excluded
+		TimeoutSec int      `json:"timeout_sec"`
+		Extra      *string  `json:"extra,omitempty"`
+	}{
+		Provider:   c.Provider,
+		Model:      c.Model,
+		BaseURL:    c.BaseURL,
+		APIKey:     "",
+		TimeoutSec: c.TimeoutSec,
+		Extra:      c.Extra,
+	}
+	return json.Marshal(withoutKey)
 }
 
 // ExtraSettings holds additional per-provider tuning options.
@@ -134,6 +157,32 @@ func (s AISettings) ActiveConfig() *ProviderConfig {
 	return &dp.Ollama
 }
 
+// GetActiveProviderConfig returns the active provider config from the DB,
+// or a default if no settings are persisted.
+// For Minimax provider, the API key is resolved at call time via keyring/env-var
+// and is never persisted to SQLite.
+func GetActiveProviderConfig(ctx context.Context, db *sql.DB) (ProviderConfig, error) {
+	settings, err := GetAISettings(ctx, db)
+	if err != nil {
+		return ProviderConfig{}, err
+	}
+	cfg := settings.ActiveConfig()
+	if cfg == nil {
+		return ProviderConfig{}, fmt.Errorf("no active provider configured")
+	}
+	result := *cfg
+	// Resolve the API key at call time rather than storing it in the config.
+	// This ensures APIKey is never persisted to SQLite.
+	if result.Provider == ProviderMinimax {
+		key, err := GetMinimaxKey(ctx)
+		if err != nil {
+			return result, err // includes ErrAPINotConfigured
+		}
+		result.APIKey = key
+	}
+	return result, nil
+}
+
 // containsNoSuchTable reports whether err indicates a missing table.
 func containsNoSuchTable(err error) bool {
 	return err != nil && (contains(err.Error(), "no such table") ||
@@ -156,18 +205,4 @@ func ensureSettingsTable(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx,
 		`CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)`)
 	return err
-}
-
-// GetActiveProviderConfig returns the active provider config from the DB,
-// or a default if no settings are persisted.
-func GetActiveProviderConfig(ctx context.Context, db *sql.DB) (ProviderConfig, error) {
-	settings, err := GetAISettings(ctx, db)
-	if err != nil {
-		return ProviderConfig{}, err
-	}
-	cfg := settings.ActiveConfig()
-	if cfg == nil {
-		return ProviderConfig{}, fmt.Errorf("no active provider configured")
-	}
-	return *cfg, nil
 }

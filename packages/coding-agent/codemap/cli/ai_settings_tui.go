@@ -264,7 +264,12 @@ func (m *AITUIState) saveSettings() tea.Cmd {
 			settings.Minimax.Model = m.model
 			settings.Minimax.BaseURL = m.baseURL
 			settings.Minimax.TimeoutSec = m.timeoutSec
-			settings.Minimax.APIKey = m.apiKey
+			// Store the API key in the OS keyring, not in SQLite.
+			if m.apiKey != "" {
+				if err := store.StoreMinimaxKey(ctx, m.apiKey); err != nil {
+					return aiSaveError{msg: "store api key: " + err.Error()}
+				}
+			}
 		}
 
 		if err := store.SaveAISettings(ctx, db.DB, settings); err != nil {
