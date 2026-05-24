@@ -14,6 +14,8 @@ import (
 	"codrut/packages/coding-agent/codemap/cli/installer"
 )
 
+const maxGraphQueryDepth = 5
+
 var repoFlag string
 
 func main() {
@@ -72,6 +74,14 @@ func main() {
 	case "deadcode":
 		exitCode = runWithHelp(ctx, stdout, stderr, "deadcode", subargs, repoRoot,
 			func() int { return cli.RunDeadcode(ctx, stdout, subargs, repoRoot) })
+	case "ai-settings":
+		exitCode = cli.RunAISettings(ctx, stdout, subargs, repoRoot)
+	case "ai-test":
+		exitCode = runWithHelp(ctx, stdout, stderr, "ai-test", subargs, repoRoot,
+			func() int { return cli.RunAITest(ctx, stdout, subargs, repoRoot) })
+	case "graph-query":
+		exitCode = runWithHelp(ctx, stdout, stderr, "graph-query", subargs, repoRoot,
+			func() int { return cli.RunGraphQuery(ctx, stdout, subargs, repoRoot) })
 	case "install":
 		exitCode = runInstall(ctx, stdout, stderr, subargs)
 	case "doctor":
@@ -213,6 +223,9 @@ func helpRoot(w io.Writer) {
 	fmt.Fprintf(w, "  codemap deadcode    Report unused/likely-unused symbols with suggestions\n")
 	fmt.Fprintf(w, "  codemap install     Install codemap skill and tool into Pi runtime\n")
 	fmt.Fprintf(w, "  codemap doctor      Diagnose codemap environment and integration\n")
+	fmt.Fprintf(w, "  codemap ai-settings Configure AI providers (Ollama/Minimax)\n")
+	fmt.Fprintf(w, "  codemap ai-test     Test AI provider connectivity\n")
+	fmt.Fprintf(w, "  codemap graph-query Answer project graph questions from a prompt\n")
 	fmt.Fprintf(w, "\nUse 'codemap help <command>' for per-command usage.\n")
 	fmt.Fprintf(w, "\nExamples:\n")
 	fmt.Fprintf(w, "  codemap index --db myrepo.db\n")
@@ -283,6 +296,44 @@ func helpFor(cmd string, w io.Writer) {
 		fmt.Fprintf(w, "\nExample:\n")
 		fmt.Fprintf(w, "  codemap doctor            # human-readable report\n")
 		fmt.Fprintf(w, "  codemap doctor --json     # JSON for automation\n")
+	case "ai-settings":
+		fmt.Fprintf(w, "Usage: codemap ai-settings [subcommand] [flags]\n\n")
+		fmt.Fprintf(w, "Configure AI providers (Ollama and Minimax).\n\n")
+		fmt.Fprintf(w, "Subcommands:\n")
+		fmt.Fprintf(w, "  codemap ai-settings              Show current settings\n")
+		fmt.Fprintf(w, "  codemap ai-settings get <key>  Get a setting value\n")
+		fmt.Fprintf(w, "  codemap ai-settings set <key> <value>\n")
+		fmt.Fprintf(w, "  codemap ai-settings list-providers\n")
+		fmt.Fprintf(w, "\nKeys:\n")
+		fmt.Fprintf(w, "  active_provider\n")
+		fmt.Fprintf(w, "  ollama.model, ollama.base_url, ollama.timeout_sec\n")
+		fmt.Fprintf(w, "  minimax.model, minimax.base_url, minimax.timeout_sec\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap ai-settings get active_provider\n")
+	case "ai-test":
+		fmt.Fprintf(w, "Usage: codemap ai-test [flags]\n\n")
+		fmt.Fprintf(w, "Test AI provider connectivity using active config.\n")
+		fmt.Fprintf(w, "\nFlags:\n  -db path    Path to SQLite database (optional)\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap ai-test\n")
+	case "graph-query":
+		fmt.Fprintf(w, "Usage: codemap graph-query [flags] <prompt>\n\n")
+		fmt.Fprintf(w, "Answer project graph questions using deterministic keyword parsing.\n")
+		fmt.Fprintf(w, "No LLM required — maps natural language to impact query parameters.\n")
+		fmt.Fprintf(w, "\nFlags:\n")
+		fmt.Fprintf(w, "  -db path         Path to SQLite database (optional)\n")
+		fmt.Fprintf(w, "  -depth N         Override parsed depth (1-%d)\n", maxGraphQueryDepth)
+		fmt.Fprintf(w, "  -no-cache        Force live CTE query\n")
+		fmt.Fprintf(w, "  -symbol <name>   Explicit symbol (overrides parsed symbol)\n")
+		fmt.Fprintf(w, "\nSupported patterns:\n")
+		fmt.Fprintf(w, "  what affects <symbol>\n")
+		fmt.Fprintf(w, "  who calls <symbol>\n")
+		fmt.Fprintf(w, "  impact of <symbol>\n")
+		fmt.Fprintf(w, "  blast radius of <symbol>\n")
+		fmt.Fprintf(w, "  <symbol>         (raw symbol name)\n")
+		fmt.Fprintf(w, "  N hops from <symbol>\n")
+		fmt.Fprintf(w, "  <symbol> at depth N\n")
+		fmt.Fprintf(w, "\nExample:\n  codemap graph-query 'what affects Add'\n")
+		fmt.Fprintf(w, "  codemap graph-query --depth 5 Add\n")
+		fmt.Fprintf(w, "  codemap graph-query --symbol Add --no-cache\n")
 	default:
 		fmt.Fprintf(w, "No help available for %q.\n", cmd)
 	}
